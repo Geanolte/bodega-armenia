@@ -174,9 +174,9 @@ td input.warn{border-color:var(--er);background:#fdeceb}
     <div class="row" style="margin-top:12px">
       <button id="btnCompletar">Sugerir qué agregar para llenar el vehículo</button>
       <button class="sec" id="btnSug">Cargar agotados sugeridos</button>
-      <button id="btnImprimir">Imprimir listado de cargue</button>
-      <button class="sec" id="btnPlanXls">Descargar plan en Excel</button>
-      <button class="dng" id="btnVaciar">Vaciar plan</button>
+      <button id="btnImprimir">Imprimir listado de cargue: traer</button>
+      <button class="sec" id="btnPlanXls">Descargar plan en Excel: traer</button>
+      <button class="dng" id="btnVaciar">Vaciar plan de traer</button>
     </div>
     <div class="hint">Seleccione abajo las referencias y cantidades a mover. La app indica si la carga cumple, excede o si todavía se puede agregar más. Todo se guarda automáticamente.</div>
     <div id="planMsg"></div>
@@ -193,18 +193,9 @@ td input.warn{border-color:var(--er);background:#fdeceb}
     <div class="hint" id="cInfo"></div>
   </div>
   <div class="card">
-    <h2>Agregar producto al plan</h2>
-    <div class="row">
-      <div style="width:260px"><label>Movimiento</label>
-        <select id="aDir"><option value="traer">Traer de externa (07X1E) a general</option><option value="llevar">Llevar de general a externa</option></select></div>
-      <div style="flex:1;min-width:240px"><label>Buscar producto (referencia o descripción)</label><input id="aQ" autocomplete="off" placeholder="Escriba al menos 2 letras"></div>
-    </div>
-    <div class="res hide" id="aRes"></div>
-  </div>
-  <div class="card">
-    <div class="sec2" style="margin-top:0"><h3>Traer de externa (07X1E) a general</h3>
+    <div class="sec2" id="sTraer" style="margin-top:0"><h3>Plan: traer de la externa (07X1E) a la general</h3>
       <div class="tw"><table id="tTraer"></table></div></div>
-    <div class="sec2"><h3>Llevar de general a externa</h3>
+    <div class="sec2 hide" id="sLlevar" style="margin-top:0"><h3>Plan: llevar de la general a la externa</h3>
       <div class="tw"><table id="tLlevar"></table></div></div>
   </div>
 </section>
@@ -594,12 +585,12 @@ function totales(dir){
 }
 function pintarPlan(){
   if(!asegurar()){$('tTraer').innerHTML='<tr><td>Cargue los datos en la pestaña «1. Datos».</td></tr>';$('tLlevar').innerHTML='';$('planKpis').innerHTML='';$('estTraer').innerHTML='';$('estLlevar').innerHTML='';$('tCat').innerHTML='';return}
-  const cap=capKg(),T=totales('traer'),L=totales('llevar');
+  const cap=capKg(),T=totales(dirT),v=dirT==='traer'?'traer':'llevar';
   $('planKpis').innerHTML=[
-    ['Productos a traer',T.n],['Unidades a traer',fn(T.u)],['Peso a traer (kg)',fk(T.kg)],
-    ['Capacidad total (kg)',fk(cap)],['Capacidad libre (kg)',T.kg>cap?'Excede '+fk(T.kg-cap):fk(cap-T.kg)],
-    ['Productos a llevar',L.n],['Peso a llevar (kg)',fk(L.kg)]
+    ['Productos a '+v,T.n],['Unidades a '+v,fn(T.u)],['Peso a '+v+' (kg)',fk(T.kg)],
+    ['Capacidad total (kg)',fk(cap)],['Capacidad libre (kg)',T.kg>cap?'Excede '+fk(T.kg-cap):fk(cap-T.kg)]
   ].map(k=>`<div class="kpi"><b>${k[1]}</b><span>${k[0]}</span></div>`).join('');
+  $('sTraer').classList.toggle('hide',dirT!=='traer');$('sLlevar').classList.toggle('hide',dirT!=='llevar');
   pintarEstado();
   const head=(acc)=>`<tr><th>Referencia</th><th>Descripción</th><th>Grupo shopper</th><th>Origen</th><th class="n">${acc==='traer'?'Stock 07X1E':'Stock general'}</th><th class="n">Venta diaria</th><th class="n">Peso unit. (g)</th><th class="n">Cantidad</th><th class="n">Peso total (kg)</th><th></th></tr>`;
   const fila=x=>{
@@ -673,8 +664,8 @@ function pintarEstado(){
     return V.map(v=>`Vehículo ${v.n}: ${fk(v.kg)} kg (${fk(v.kg/cap*100)}%)`).join(' · ')+(sobra.length?` · <b>Sin vehículo: ${fk(sobra.reduce((s,a)=>s+a.kg,0))} kg</b>`:'');
   };
   const E=d=>{const e=estadoCarga(d),dv=detVeh(d);return `<div class="est ${e.cls}">${d==='traer'?'Traer de la externa a la general':'Llevar de la general a la externa'}: ${e.tit}<small>${e.det}</small>${dv?`<small>Reparto por vehículo → ${dv}</small>`:''}</div>`};
-  $('estTraer').innerHTML=(dirT==='traer'||totales('traer').n)?E('traer'):'';
-  $('estLlevar').innerHTML=(dirT==='llevar'||totales('llevar').n)?E('llevar'):'';
+  $('estTraer').innerHTML=dirT==='traer'?E('traer'):'';
+  $('estLlevar').innerHTML=dirT==='llevar'?E('llevar'):'';
   const T=totales(dirT),cap=capKg(),bar=$('planBar');bar.style.width=Math.min(100,T.kg/cap*100)+'%';
   bar.className=T.kg>cap+1e-6?'ex':(T.kg>=cap*((+S.cfg.fill||95)/100)?'ok':'');
 }
@@ -683,6 +674,10 @@ function setDirT(d){
   dirT=d;
   document.querySelectorAll('#dirTabs button').forEach(b=>b.classList.toggle('on',b.dataset.dir===d));
   $('btnCompletar').classList.toggle('hide',d!=='traer');
+  const v=d==='traer'?'traer':'llevar';
+  $('btnImprimir').textContent='Imprimir listado de cargue: '+v;
+  $('btnPlanXls').textContent='Descargar plan en Excel: '+v;
+  $('btnVaciar').textContent='Vaciar plan de '+v;
   $('btnSug').textContent=d==='traer'?'Cargar agotados sugeridos':'Cargar excedentes sugeridos para llenar el vehículo';
   $('cTitulo').textContent=d==='traer'?'Productos disponibles en la externa (07X1E): escriba la cantidad a mover':'Productos de la general que se pueden llevar a la externa: escriba la cantidad a mover';
   $('cNecT').textContent=d==='traer'?'Solo los que necesitan reposición':'Solo excesos y sin rotación';
@@ -796,19 +791,23 @@ $('btnCompletar').onclick=()=>{
   savePlan();pintarPlan();
   mensaje(n?('Se agregaron '+n+' producto(s) por rotación. Peso del plan: '+fk(W)+' kg'+(W<obj?'. No hay más productos de 07X1E que lo necesiten; faltan '+fk(obj-W)+' kg.':'.')):'No hay más productos en 07X1E con peso conocido que lo necesiten para completar el peso.');
 };
-$('btnVaciar').onclick=()=>{if(S.plan.length&&!confirm('¿Vaciar el plan de traslado?'))return;S.plan=[];savePlan();$('planMsg').innerHTML='';pintarPlan()};
+$('btnVaciar').onclick=()=>{
+  const v=dirT==='traer'?'traer':'llevar';
+  if(S.plan.some(x=>x.dir===dirT)&&!confirm('¿Vaciar el plan de '+v+'?'))return;
+  S.plan=S.plan.filter(x=>x.dir!==dirT);savePlan();$('planMsg').innerHTML='';pintarPlan();
+};
 $('btnPlanXls').onclick=()=>{
-  if(!S.plan.length){mensaje('El plan está vacío.',true);return}
+  if(!S.plan.some(x=>x.dir===dirT)){mensaje('No hay productos en el plan de '+(dirT==='traer'?'traer':'llevar')+'.',true);return}
   const wb=XLSX.utils.book_new();
   const cap=capKg(),cap1=+S.cfg.cap||2000,sum=[['Vehículos',S.cfg.veh],['Capacidad por vehículo (kg)',S.cfg.cap],['Capacidad total (kg)',cap],[],['Movimiento','Productos','Unidades','Peso (kg)','% de la capacidad','Estado']];
-  for(const [nm,d] of [['Traer de externa a general','traer'],['Llevar de general a externa','llevar']]){const t=totales(d),e=estadoCarga(d);sum.push([nm,t.n,t.u,+t.kg.toFixed(1),+(t.kg/cap*100).toFixed(1),e.tit])}
+  for(const [nm,d] of [['Traer de externa a general','traer'],['Llevar de general a externa','llevar']].filter(a=>a[1]===dirT)){const t=totales(d),e=estadoCarga(d);sum.push([nm,t.n,t.u,+t.kg.toFixed(1),+(t.kg/cap*100).toFixed(1),e.tit])}
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Resumen');
-  for(const d of ['traer','llevar']){
+  for(const d of [dirT]){
     const {V,sobra}=distribuir(d);
     for(const v of V)if(v.items.length)sum.push([`   ${d==='traer'?'Traer':'Llevar'} · Vehículo ${v.n}`+((S.cfg.vinfo&&S.cfg.vinfo[v.n-1])?' · '+S.cfg.vinfo[v.n-1]:''),v.items.length,v.u,+v.kg.toFixed(1),+(v.kg/cap1*100).toFixed(1),estadoKg(v.kg,cap1).tit]);
     if(sobra.length)sum.push([`   ${d==='traer'?'Traer':'Llevar'} · SIN VEHÍCULO (no cabe)`,sobra.length,sobra.reduce((s,a)=>s+a.qty,0),+sobra.reduce((s,a)=>s+a.kg,0).toFixed(1),'','EXCEDE']);
   }
-  for(const [nm,dir] of [['Traer a general','traer'],['Llevar a externa','llevar']]){
+  for(const [nm,dir] of [['Traer a general','traer'],['Llevar a externa','llevar']].filter(a=>a[1]===dirT)){
     const {V,sobra}=distribuir(dir);
     const aoa=[['Vehículo','Conductor / placa','Referencia','Descripción','Grupo shopper','Origen','Cantidad','Peso unit. (g)','Peso total (kg)']];
     const fila=(vn,vi,it)=>{const g=pesoG(it.x.k);aoa.push([vn,vi,it.x.ref,it.x.desc,it.x.grupo,it.x.org==='sug'?'Sugerido':it.x.org==='comp'?'Completar peso':'Manual',it.qty,g==null?'':g,it.kg==null?'':+it.kg.toFixed(2)])};
@@ -816,13 +815,13 @@ $('btnPlanXls').onclick=()=>{
     for(const it of sobra)fila('Sin vehículo','',it);
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),nm);
   }
-  XLSX.writeFile(wb,'plan_traslado_armenia_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb,'plan_'+dirT+'_armenia_'+new Date().toISOString().slice(0,10)+'.xlsx');
 };
 /* ---------- Listado de cargue imprimible ---------- */
 function imprimir(){
   if(!asegurar())return;
-  const dirs=['traer','llevar'].filter(d=>S.plan.some(x=>x.dir===d&&x.qty>0));
-  if(!dirs.length){mensaje('No hay productos seleccionados para imprimir.',true);return}
+  const dirs=[dirT].filter(d=>S.plan.some(x=>x.dir===d&&x.qty>0));
+  if(!dirs.length){mensaje('No hay productos seleccionados para imprimir en «'+(dirT==='traer'?'traer':'llevar')+'».',true);return}
   const cap=+S.cfg.cap||2000,nveh=Math.max(1,Math.round(+S.cfg.veh||1)),ahora=new Date().toLocaleString('es-CO',{dateStyle:'long',timeStyle:'short'});
   const paginas=[];
   for(const d of dirs){
@@ -865,23 +864,6 @@ function imprimir(){
   setTimeout(()=>{document.title=titulo},1500);
 }
 $('btnImprimir').onclick=imprimir;
-/* búsqueda para agregar a mano */
-$('aQ').oninput=buscar;$('aDir').onchange=buscar;
-function buscar(){
-  const q=$('aQ').value.trim().toLowerCase(),box=$('aRes');
-  if(q.length<2||!asegurar()){box.classList.add('hide');return}
-  const dir=$('aDir').value;
-  const r=[...res.items.values()].filter(it=>(dir==='traer'?it.l>0:it.p>0&&!it.per)&&(it.ref.toLowerCase().includes(q)||it.desc.toLowerCase().includes(q))).slice(0,15);
-  box.innerHTML=r.length?r.map(it=>`<div data-pick="${esc(it.k)}">${esc(it.ref)} · ${esc(it.desc)} <span style="color:var(--mut)">(${dir==='traer'?'07X1E: '+fn(it.l):'general: '+fn(it.p)})</span></div>`).join(''):'<div style="cursor:default;color:var(--mut)">Sin coincidencias con stock disponible'+(dir==='llevar'?' (los perecederos no se pueden llevar)':'')+'</div>';
-  box.classList.remove('hide');
-}
-$('aRes').onclick=e=>{
-  const p=e.target.closest('[data-pick]');if(!p)return;
-  const it=res.items.get(p.dataset.pick),dir=$('aDir').value;
-  if(!it||!validarAgregar(it,dir))return;
-  agregar(it,dir,Math.max(1,Math.min(dir==='traer'?it.l:it.p,it.need||1)),'manual');
-  $('aQ').value='';$('aRes').classList.add('hide');mensaje('Se agregó '+it.ref+' al plan. Ajuste la cantidad en la tabla.');
-};
 
 /* ---------- Navegación e inicio ---------- */
 function show(v){
