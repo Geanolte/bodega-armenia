@@ -48,6 +48,9 @@ tr:hover td{background:#F7F2E7}
 td.n,th.n{text-align:right}
 td input{padding:3px 5px;width:70px;text-align:right}
 td button.sm{padding:2px 7px}
+button.ok{background:#2f7d4a;color:#fff}
+tr.sel td{background:#F3E9D2}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0D0D0D;color:#F2EFE6;padding:8px 14px;border-radius:8px;font-size:13px;z-index:20;display:none;border:1px solid var(--ac)}
 /* impresión del listado de cargue */
 #printArea{display:none}
 .pr{color:#000;font:12px/1.35 Arial,sans-serif}
@@ -206,6 +209,7 @@ td input.warn{border-color:var(--er);background:#fdeceb}
 </section>
 </main>
 
+<div id="toast"></div>
 <div id="printArea"></div>
 <script>
 const $=id=>document.getElementById(id);
@@ -496,12 +500,18 @@ function render(){
    ['Perecederos con baja rotación (no mover)',res.perec.length],['Ofertas (OF) con alerta',res.ofertas.length],['Referencias analizadas',res.total]
   ].map(k=>`<div class="kpi"><b>${k[1].toLocaleString('es-CO')}</b><span>${k[0]}</span></div>`).join('');
   $('refInfo').textContent='Fecha de referencia (último día de movimientos): '+fd(res.ref)+' · '+res.movs.toLocaleString('es-CO')+' registros de salida'+(res.nOfv?' · '+res.nOfv+' ofertas virtuales descompuestas en componentes':'');
-  $('tabs').innerHTML=Object.keys(NOM).map(k=>`<button class="${k===tab?'on':''}" data-tab="${k}">${NOM[k]} (${res[k].length})</button>`).join('');
+  pintarTabs();
   const gs=[...new Set(res[tab].map(r=>r.grupo))].sort(),prev=$('fGrupo').value;
   $('fGrupo').innerHTML='<option value="">Todos los grupos shopper</option>'+gs.map(g=>`<option>${esc(g)}</option>`).join('');
   if(gs.includes(prev))$('fGrupo').value=prev;
   tabla();
 }
+function pintarTabs(){
+  const nSel=k=>k==='traer'||k==='llevar'?res[k].filter(r=>enPlan(r.k,k)).length:0;
+  $('tabs').innerHTML=Object.keys(NOM).map(k=>`<button class="${k===tab?'on':''}" data-tab="${k}">${NOM[k]} (${res[k].length})${nSel(k)?` · ${nSel(k)} en plan`:''}</button>`).join('');
+}
+function aviso(t){const el=$('toast');el.textContent=t;el.style.display='block';clearTimeout(aviso.t);aviso.t=setTimeout(()=>{el.style.display='none'},3200)}
+function refrescarAnalisis(){if(!res)return;pintarTabs();tabla()}
 const fmt=(k,v)=>v==null?(k==='dsm'?'Sin ventas':'—'):(typeof v==='number'?(k==='dia'||k==='cob'?v.toFixed(1):fn(v)):esc(v));
 function tabla(){
   if(!res)return;
@@ -510,12 +520,14 @@ function tabla(){
   if(sortK)d=[...d].sort((a,b)=>((a[sortK]??-1)>(b[sortK]??-1)?1:-1)*sortD);
   const cols=COLS[tab];
   $('tbl').innerHTML='<tr>'+cols.map(c=>`<th class="${c[2]||''}" data-sort="${c[0]}">${c[1]}</th>`).join('')+'</tr>'+
-   d.map(r=>'<tr>'+cols.map(c=>{
+   d.map(r=>{const pe=(tab==='traer'||tab==='llevar')?enPlan(r.k,tab):null;return `<tr${pe?' class="sel"':''}>`+cols.map(c=>{
      const v=r[c[0]];
-     if(c[0]==='acc')return `<td><button class="sm sec" data-add="${tab}" data-k="${esc(r.k)}" title="Agregar al plan de traslado">+ Plan</button></td>`;
+     if(c[0]==='acc')return pe
+       ?`<td><button class="sm ok" data-add="${tab}" data-k="${esc(r.k)}" title="Ya está en el plan. Pulse para quitarlo">✓ En plan · ${fn(pe.qty)}</button></td>`
+       :`<td><button class="sm sec" data-add="${tab}" data-k="${esc(r.k)}" title="Agregar al plan de traslado">+ Plan</button></td>`;
      if(c[0]==='desc')return `<td class="d">${esc(r.desc)}${r.marca?`<small>${esc(r.marca)}</small>`:''}</td>`;
      if(c[0]==='est'||c[0]==='motivo'){const cl=/^Agotado/.test(v)?'t-er':/Por agotarse|Exceso/.test(v)?'t-wa':'t-ok';return `<td><span class="tag ${cl}">${esc(v)}</span></td>`}
-     return `<td class="${c[2]||''}">${fmt(c[0],v)}</td>`}).join('')+'</tr>').join('');
+     return `<td class="${c[2]||''}">${fmt(c[0],v)}</td>`}).join('')+'</tr>'}).join('');
 }
 $('tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b){tab=b.dataset.tab;sortK=null;render()}};
 $('tbl').onclick=e=>{
@@ -549,11 +561,17 @@ function filaPlan(it,dir,qty,org){
 function agregarDesdeAnalisis(t,k){
   if(!res)return;const it=res.items.get(k);if(!it)return;
   const dir=t==='traer'?'traer':'llevar';
-  if(!validarAgregar(it,dir))return;
+  const e=enPlan(k,dir);
+  if(e){   // ya estaba seleccionado: el mismo botón lo quita
+    S.plan=S.plan.filter(x=>x!==e);savePlan();pintarPlan();refrescarAnalisis();
+    aviso('Se quitó '+it.ref+' del plan.');return;
+  }
+  if(!validarAgregar(it,dir)){aviso($('planMsg').innerText);return}
   const src=res[t].find(r=>r.k===k);
-  const qty=src?src.sug:1;
+  const qty=Math.max(1,src?Math.min(src.sug,dir==='traer'?it.l:it.p):1);
   agregar(it,dir,qty,'manual');
-  mensaje('Se agregó '+it.ref+' al plan de traslado ('+(dir==='traer'?'traer':'llevar')+').');
+  refrescarAnalisis();
+  aviso(it.ref+' agregado al plan ('+(dir==='traer'?'traer':'llevar')+', '+fn(qty)+' unid.). Ajuste la cantidad en Traslado.');
 }
 function validarAgregar(it,dir){
   if(dir==='llevar'&&it.per){mensaje('No se puede llevar a la externa: «'+it.desc+'» es perecedero.',true);return false}
