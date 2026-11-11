@@ -628,18 +628,22 @@ function estadoKg(kg,cap){
   if(kg>=cap*fill)return {tit:'CUMPLE: el vehículo va lleno ('+fk(kg/cap*100)+'%)'};
   return {tit:'PUEDE AGREGAR hasta '+fk(cap-kg)+' kg más ('+fk(kg/cap*100)+'% de la capacidad)'};
 }
-/* Reparte el plan entre los vehículos, en orden de alistamiento (grupo y descripción); divide una referencia si no cabe completa */
+/* Reparte el plan entre los vehículos configurados, en partes equilibradas y en orden de alistamiento (grupo y descripción).
+   Cada vehículo recibe aproximadamente el mismo peso, sin pasar su capacidad; una referencia se divide si queda en el límite. */
 function distribuir(dir){
   const nveh=Math.max(1,Math.round(+S.cfg.veh||1)),cap=+S.cfg.cap||2000;
   const rows=S.plan.filter(x=>x.dir===dir&&x.qty>0).slice().sort((a,b)=>(a.grupo||'').localeCompare(b.grupo||'')||a.desc.localeCompare(b.desc));
   const V=Array.from({length:nveh},(_,i)=>({n:i+1,items:[],kg:0,u:0})),sobra=[];
+  const tot=rows.reduce((s,x)=>{const g=pesoG(x.k);return s+(g>0?g*x.qty/1000:0)},0);
+  const objetivo=Math.min(cap,tot/nveh);   // peso que debería llevar cada vehículo
   let vi=0;
   for(const x of rows){
     let q=x.qty;const g=pesoG(x.k);
     if(!(g>0)){const v=V[Math.min(vi,nveh-1)];v.items.push({x,qty:q,kg:null});v.u+=q;continue}   // sin peso: va en el vehículo actual
     while(q>0){
       if(vi>=nveh){sobra.push({x,qty:q,kg:q*g/1000});break}
-      const v=V[vi],caben=Math.floor((cap-v.kg)*1000/g+1e-9);
+      const lim=vi<nveh-1?objetivo:cap;   // el último vehículo absorbe el resto, hasta su capacidad
+      const v=V[vi],caben=Math.floor((lim-v.kg)*1000/g+1e-9);
       if(caben>=q){v.items.push({x,qty:q,kg:q*g/1000});v.kg+=q*g/1000;v.u+=q;q=0}
       else{
         if(caben>0){v.items.push({x,qty:caben,kg:caben*g/1000});v.kg+=caben*g/1000;v.u+=caben;q-=caben}
