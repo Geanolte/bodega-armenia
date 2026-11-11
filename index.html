@@ -132,6 +132,10 @@ td input.warn{border-color:var(--er);background:#fdeceb}
 <section id="v-traslado" class="hide">
   <div class="card">
     <h2>Vehículo y estado de la carga</h2>
+    <div class="tabs" id="dirTabs">
+      <button data-dir="traer" class="on">Traer de la externa a la general (agotados)</button>
+      <button data-dir="llevar">Llevar de la general a la externa (excesos)</button>
+    </div>
     <div class="row">
       <div style="width:150px"><label>Número de vehículos</label><input type="number" id="pVeh" min="1" step="1"></div>
       <div style="width:230px"><label>Capacidad por vehículo</label>
@@ -153,11 +157,11 @@ td input.warn{border-color:var(--er);background:#fdeceb}
     <div class="kpis" id="planKpis" style="margin-top:12px"></div>
   </div>
   <div class="card">
-    <h2>Productos disponibles en la externa (07X1E): escriba la cantidad a mover</h2>
+    <h2 id="cTitulo">Productos disponibles en la externa (07X1E): escriba la cantidad a mover</h2>
     <div class="row" style="margin-bottom:10px">
       <div style="flex:1;min-width:200px"><input id="cQ" placeholder="Buscar por referencia, descripción o marca"></div>
       <div style="min-width:220px"><select id="cGrupo"></select></div>
-      <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--tx);font-size:13px"><input type="checkbox" id="cNec"> Solo los que necesitan reposición</label>
+      <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--tx);font-size:13px"><input type="checkbox" id="cNec"> <span id="cNecT">Solo los que necesitan reposición</span></label>
     </div>
     <div class="tw" id="twCat"><table id="tCat"></table></div>
     <div class="hint" id="cInfo"></div>
@@ -585,39 +589,56 @@ function estadoCarga(dir){
 }
 function pintarEstado(){
   const E=d=>{const e=estadoCarga(d);return `<div class="est ${e.cls}">${d==='traer'?'Traer de la externa a la general':'Llevar de la general a la externa'}: ${e.tit}<small>${e.det}</small></div>`};
-  $('estTraer').innerHTML=E('traer');
-  $('estLlevar').innerHTML=totales('llevar').n?E('llevar'):'';
-  const T=totales('traer'),cap=capKg(),bar=$('planBar');bar.style.width=Math.min(100,T.kg/cap*100)+'%';
+  $('estTraer').innerHTML=(dirT==='traer'||totales('traer').n)?E('traer'):'';
+  $('estLlevar').innerHTML=(dirT==='llevar'||totales('llevar').n)?E('llevar'):'';
+  const T=totales(dirT),cap=capKg(),bar=$('planBar');bar.style.width=Math.min(100,T.kg/cap*100)+'%';
   bar.className=T.kg>cap+1e-6?'ex':(T.kg>=cap*((+S.cfg.fill||95)/100)?'ok':'');
 }
-function setQtyTraer(k,q){
+let dirT='traer';
+function setDirT(d){
+  dirT=d;
+  document.querySelectorAll('#dirTabs button').forEach(b=>b.classList.toggle('on',b.dataset.dir===d));
+  $('btnCompletar').classList.toggle('hide',d!=='traer');
+  $('btnSug').textContent=d==='traer'?'Cargar agotados sugeridos':'Cargar excedentes sugeridos para llenar el vehículo';
+  $('cTitulo').textContent=d==='traer'?'Productos disponibles en la externa (07X1E): escriba la cantidad a mover':'Productos de la general que se pueden llevar a la externa: escriba la cantidad a mover';
+  $('cNecT').textContent=d==='traer'?'Solo los que necesitan reposición':'Solo excesos y sin rotación';
+  $('cNec').checked=false;$('planMsg').innerHTML='';pintarPlan();
+}
+$('dirTabs').onclick=e=>{const b=e.target.closest('[data-dir]');if(b)setDirT(b.dataset.dir)};
+function setQty(k,q,dir){
   const it=res.items.get(k);if(!it)return;
-  const e=enPlan(k,'traer');q=Math.max(0,Math.round(q||0));
+  const e=enPlan(k,dir);q=Math.max(0,Math.round(q||0));
+  if(q>0&&!e&&!validarAgregar(it,dir))return;
   if(q===0){if(e)S.plan=S.plan.filter(x=>x!==e)}
   else if(e){e.qty=q;e.org='manual'}
-  else S.plan.push(filaPlan(it,'traer',q,'manual'));
+  else S.plan.push(filaPlan(it,dir,q,'manual'));
   savePlan();$('planMsg').innerHTML='';pintarPlan();
 }
 function pintarCat(){
   if(!res)return;
-  const q=$('cQ').value.toLowerCase(),g=$('cGrupo').value,nec=$('cNec').checked;
-  const all=[...res.items.values()].filter(it=>it.l>0&&!esOF(it.ref));
-  const gs=[...new Set(all.map(i=>i.grupo||'Sin grupo'))].sort(),key=gs.join('|');
+  const dir=dirT,q=$('cQ').value.toLowerCase(),nec=$('cNec').checked;
+  const lv=new Map(res.llevar.map(r=>[r.k,r]));
+  const all=[...res.items.values()].filter(it=>!esOF(it.ref)&&(dir==='traer'?it.l>0:(it.p>0&&!it.per)));
+  const gs=[...new Set(all.map(i=>i.grupo||'Sin grupo'))].sort(),key=dir+'|'+gs.join('|');
   if($('cGrupo').dataset.k!==key){const prev=$('cGrupo').value;$('cGrupo').dataset.k=key;
     $('cGrupo').innerHTML='<option value="">Todos los grupos shopper</option>'+gs.map(x=>`<option>${esc(x)}</option>`).join('');
     if(gs.includes(prev))$('cGrupo').value=prev}
-  let r=all.filter(it=>(!$('cGrupo').value||(it.grupo||'Sin grupo')===$('cGrupo').value)&&(!nec||it.need>0)&&(!q||it.ref.toLowerCase().includes(q)||it.desc.toLowerCase().includes(q)||(it.marca||'').toLowerCase().includes(q)));
-  r.sort((a,b)=>((b.need>0)-(a.need>0))||((a.cob??1e9)-(b.cob??1e9))||b.dia-a.dia);
+  let r=all.filter(it=>(!$('cGrupo').value||(it.grupo||'Sin grupo')===$('cGrupo').value)&&(!nec||(dir==='traer'?it.need>0:lv.has(it.k)))&&(!q||it.ref.toLowerCase().includes(q)||it.desc.toLowerCase().includes(q)||(it.marca||'').toLowerCase().includes(q)));
+  if(dir==='traer')r.sort((a,b)=>((b.need>0)-(a.need>0))||((a.cob??1e9)-(b.cob??1e9))||b.dia-a.dia);
+  else r.sort((a,b)=>(lv.has(b.k)-lv.has(a.k))||((lv.get(b.k)?lv.get(b.k).sug:0)-(lv.get(a.k)?lv.get(a.k).sug:0))||b.p-a.p);
   const tot=r.length;r=r.slice(0,200);
   const sc=$('twCat').scrollTop;
-  $('tCat').innerHTML='<tr><th>Referencia</th><th>Descripción</th><th>Grupo shopper</th><th class="n">Stock 07X1E</th><th class="n">Stock general</th><th class="n">Venta diaria</th><th class="n">Cobertura (días)</th><th class="n">Sugerido</th><th class="n">Peso unit. (g)</th><th class="n">Cantidad a mover</th><th class="n">Peso (kg)</th><th></th></tr>'+
-   r.map(it=>{
-    const e=enPlan(it.k,'traer'),sug=Math.min(it.l,it.need),gp=pesoG(it.k),w=e?pesoKg(it.k,e.qty):null;
-    return `<tr><td>${esc(it.ref)}</td><td>${esc(it.desc)}</td><td>${esc(it.grupo||'Sin grupo')}</td><td class="n">${fn(it.l)}</td><td class="n">${fn(it.p)}</td><td class="n">${it.dia.toFixed(1)}</td><td class="n">${it.cob==null?'—':it.cob.toFixed(1)}</td><td class="n">${sug>0?fn(sug):'—'}</td><td class="n">${gp==null?'—':fn(gp)}</td>
-     <td class="n"><input type="number" min="0" step="1" value="${e?e.qty:''}" placeholder="0" class="${e&&e.qty>it.l?'warn':''}" title="${e&&e.qty>it.l?'Supera el stock de 07X1E':''}" data-cat="${esc(it.k)}"></td>
-     <td class="n">${w==null?'—':fk(w)}</td><td>${sug>0?`<button class="sm sec" data-cats="${esc(it.k)}">Usar sugerido</button>`:''}</td></tr>`}).join('');
+  const sugDe=it=>dir==='traer'?Math.min(it.l,it.need):Math.min(it.p,lv.has(it.k)?lv.get(it.k).sug:0);
+  const H=dir==='traer'
+   ?'<tr><th>Referencia</th><th>Descripción</th><th>Grupo shopper</th><th class="n">Stock 07X1E</th><th class="n">Stock general</th><th class="n">Venta diaria</th><th class="n">Cobertura (días)</th><th class="n">Sugerido</th><th class="n">Peso unit. (g)</th><th class="n">Cantidad a mover</th><th class="n">Peso (kg)</th><th></th></tr>'
+   :'<tr><th>Referencia</th><th>Descripción</th><th>Grupo shopper</th><th class="n">Stock general</th><th class="n">Venta diaria</th><th class="n">Cobertura (días)</th><th class="n">Días sin salida</th><th>Motivo</th><th class="n">Sugerido</th><th class="n">Peso unit. (g)</th><th class="n">Cantidad a mover</th><th class="n">Peso (kg)</th><th></th></tr>';
+  $('tCat').innerHTML=H+r.map(it=>{
+    const e=enPlan(it.k,dir),sug=sugDe(it),gp=pesoG(it.k),w=e?pesoKg(it.k,e.qty):null,max=dir==='traer'?it.l:it.p;
+    const mot=lv.get(it.k),cinp=`<td class="n"><input type="number" min="0" step="1" value="${e?e.qty:''}" placeholder="0" class="${e&&e.qty>max?'warn':''}" title="${e&&e.qty>max?'Supera el stock disponible':''}" data-cat="${esc(it.k)}" data-d="${dir}"></td><td class="n">${w==null?'—':fk(w)}</td><td>${sug>0?`<button class="sm sec" data-cats="${esc(it.k)}" data-d="${dir}">Usar sugerido</button>`:''}</td>`;
+    if(dir==='traer')return `<tr><td>${esc(it.ref)}</td><td>${esc(it.desc)}</td><td>${esc(it.grupo||'Sin grupo')}</td><td class="n">${fn(it.l)}</td><td class="n">${fn(it.p)}</td><td class="n">${it.dia.toFixed(1)}</td><td class="n">${it.cob==null?'—':it.cob.toFixed(1)}</td><td class="n">${sug>0?fn(sug):'—'}</td><td class="n">${gp==null?'—':fn(gp)}</td>${cinp}</tr>`;
+    return `<tr><td>${esc(it.ref)}</td><td>${esc(it.desc)}</td><td>${esc(it.grupo||'Sin grupo')}</td><td class="n">${fn(it.p)}</td><td class="n">${it.dia.toFixed(1)}</td><td class="n">${it.cob==null?'—':it.cob.toFixed(1)}</td><td class="n">${it.dsm==null?'Sin ventas':it.dsm}</td><td>${mot?`<span class="tag ${mot.motivo==='Exceso'?'t-wa':'t-ok'}">${mot.motivo}</span>`:'—'}</td><td class="n">${sug>0?fn(sug):'—'}</td><td class="n">${gp==null?'—':fn(gp)}</td>${cinp}</tr>`}).join('');
   $('twCat').scrollTop=sc;
-  $('cInfo').textContent=(tot>200?`Se muestran 200 de ${tot} productos; use el buscador o los filtros para afinar. `:`${tot} producto(s) con stock en 07X1E. `)+'Ordenados: primero los que necesitan reposición, de menor a mayor cobertura.';
+  $('cInfo').textContent=(tot>200?`Se muestran 200 de ${tot} productos; use el buscador o los filtros para afinar. `:`${tot} producto(s) disponibles. `)+(dir==='traer'?'Ordenados: primero los que necesitan reposición, de menor a mayor cobertura.':'Ordenados: primero los excesos y sin rotación, de mayor a menor cantidad sugerida. Los perecederos no se pueden llevar a la externa.');
 }
 ['cQ'].forEach(id=>$(id).addEventListener('input',pintarCat));
 ['cGrupo','cNec'].forEach(id=>$(id).addEventListener('change',pintarCat));
@@ -630,7 +651,7 @@ function guardarVeh(){
 }
 ['pVeh','pCap','pCapOtro','pFill'].forEach(id=>$(id).addEventListener('change',guardarVeh));
 document.addEventListener('change',e=>{
-  const t=e.target;if(t.dataset&&t.dataset.cat){setQtyTraer(t.dataset.cat,+t.value);return}
+  const t=e.target;if(t.dataset&&t.dataset.cat){setQty(t.dataset.cat,+t.value,t.dataset.d||'traer');return}
   if(!t.dataset||!t.dataset.f)return;
   const k=t.dataset.k;
   if(t.dataset.f==='peso'){
@@ -644,12 +665,28 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('click',e=>{
   const u=e.target.closest('[data-cats]');
-  if(u){const it=res&&res.items.get(u.dataset.cats);if(it)setQtyTraer(u.dataset.cats,Math.min(it.l,it.need));return}
+  if(u){const k=u.dataset.cats,d=u.dataset.d||'traer',it=res&&res.items.get(k);
+    if(it){const r=res.llevar.find(x=>x.k===k);setQty(k,d==='traer'?Math.min(it.l,it.need):Math.min(it.p,r?r.sug:0),d)}return}
   const d=e.target.closest('[data-del]');if(!d)return;
   S.plan=S.plan.filter(x=>!(x.k===d.dataset.del&&x.dir===d.dataset.d));savePlan();$('planMsg').innerHTML='';pintarPlan();
 });
 $('btnSug').onclick=()=>{
   if(!asegurar())return;
+  if(dirT==='llevar'){   // excesos y sin rotación, hasta llenar el vehículo
+    S.plan=S.plan.filter(x=>!(x.dir==='llevar'&&(x.org==='sug'||x.org==='comp')));
+    const cap=capKg();let W=totales('llevar').kg,n=0;
+    const cand=res.llevar.filter(r=>!enPlan(r.k,'llevar')).map(r=>({r,it:res.items.get(r.k),g:pesoG(r.k)})).filter(c=>c.it&&c.g>0)
+      .sort((a,b)=>b.r.sug*b.g-a.r.sug*a.g);   // primero lo que más peso libera
+    for(const c of cand){
+      if(W>=cap)break;
+      let q=Math.min(c.r.sug,c.it.p);if(W+q*c.g/1000>cap)q=Math.floor((cap-W)*1000/c.g);
+      if(q<=0)continue;
+      S.plan.push(filaPlan(c.it,'llevar',q,'sug'));W+=q*c.g/1000;n++;
+    }
+    savePlan();pintarPlan();
+    mensaje(n?('Se cargaron '+n+' producto(s) con exceso o sin rotación. Peso del plan: '+fk(W)+' kg de '+fk(cap)+' kg. Puede ajustar o quitar lo que no quiera mover.'):'No hay más excesos ni productos sin rotación con peso conocido para agregar.');
+    return;
+  }
   S.plan=S.plan.filter(x=>!(x.dir==='traer'&&(x.org==='sug'||x.org==='comp')));
   let n=0;
   for(const r of res.traer){if(enPlan(r.k,'traer'))continue;const it=res.items.get(r.k);S.plan.push(filaPlan(it,'traer',r.sug,'sug'));n++}
