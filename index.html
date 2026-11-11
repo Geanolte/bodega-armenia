@@ -18,8 +18,8 @@ header p{margin:0;color:var(--sub);font-size:12px}
 nav{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
 nav button{background:transparent;color:#F2EFE6;border:1px solid #5A4E45}
 nav button.on{background:var(--ac);color:#0D0D0D;border-color:var(--ac)}
-main{max-width:1300px;margin:0 auto;padding:20px}
-.card{background:var(--card);border:1px solid var(--br);border-radius:10px;padding:16px;margin-bottom:16px}
+main{max-width:1500px;margin:0 auto;padding:12px 14px}
+.card{background:var(--card);border:1px solid var(--br);border-radius:10px;padding:12px 14px;margin-bottom:12px}
 .card h2{margin:0 0 10px;font-size:15px;color:var(--mar);border-bottom:2px solid var(--ac);padding-bottom:6px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
 label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
@@ -32,19 +32,41 @@ button.dng{background:#fff;color:var(--er);border:1px solid var(--er)}
 button:disabled{opacity:.5;cursor:not-allowed}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
 .hint{color:var(--mut);font-size:12px;margin-top:6px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
-.kpi{border:1px solid var(--br);border-radius:8px;padding:10px 12px;background:#fff}
-.kpi b{display:block;font-size:22px;color:var(--mar)}.kpi span{color:var(--mut);font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px}
+.kpi{border:1px solid var(--br);border-radius:8px;padding:4px 10px;background:#fff;line-height:1.2}
+.kpi b{display:block;font-size:16px;color:var(--mar)}.kpi span{color:var(--mut);font-size:11px}
 .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .tabs button{background:#E4DCCB;color:var(--tx)}.tabs button.on{background:var(--ac);color:#0D0D0D}
 .tw{overflow:auto;max-height:560px;border:1px solid var(--br);border-radius:8px}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{padding:6px 10px;border-bottom:1px solid var(--br);text-align:left;white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:4px 6px;border-bottom:1px solid var(--br);text-align:left;white-space:nowrap}
 td{background:#fff}
-th{position:sticky;top:0;background:#E4DCCB;color:var(--mar);cursor:pointer}
+td.d{white-space:normal;min-width:170px;max-width:340px}
+td.d small{display:block;color:var(--mut);font-size:10.5px}
+th{position:sticky;top:0;background:#E4DCCB;color:var(--mar);cursor:pointer;white-space:normal;line-height:1.15;vertical-align:bottom}
 tr:hover td{background:#F7F2E7}
 td.n,th.n{text-align:right}
-td input{padding:4px 6px;width:90px;text-align:right}
+td input{padding:3px 5px;width:70px;text-align:right}
+td button.sm{padding:2px 7px}
+/* impresión del listado de cargue */
+#printArea{display:none}
+.pr{color:#000;font:12px/1.35 Arial,sans-serif}
+.pr h1{font-size:17px;margin:0 0 6px;color:#000}
+.pr .meta{display:grid;grid-template-columns:repeat(2,1fr);gap:3px 24px;margin:6px 0 10px;font-size:12px}
+.pr table{width:100%;border-collapse:collapse}
+.pr th,.pr td{border:1px solid #444;padding:4px 6px;font-size:11.5px;white-space:normal;background:#fff;color:#000;text-align:left;position:static}
+.pr th{background:#E4DCCB!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pr td.n,.pr th.n{text-align:right}
+.pr td.c{text-align:center;width:48px}
+.pr .firmas{display:flex;gap:30px;margin-top:34px}
+.pr .firmas div{flex:1;border-top:1px solid #000;padding-top:4px;font-size:11px}
+.pr .pg{page-break-after:always}
+@media print{
+  @page{size:letter portrait;margin:12mm}
+  body{background:#fff}
+  header,main{display:none!important}
+  #printArea{display:block}
+}
 td input.warn{border-color:var(--er);background:#fdeceb}
 .tag{padding:2px 7px;border-radius:10px;font-size:11px;color:#F2EFE6;background:var(--ok)}
 .t-er{background:var(--er)}.t-wa{background:var(--wa);color:#0D0D0D}.t-ok{background:var(--ok)}
@@ -113,9 +135,8 @@ td input.warn{border-color:var(--er);background:#fdeceb}
 <!-- ===== 2. ANÁLISIS ===== -->
 <section id="v-analisis" class="hide">
   <div class="card">
-    <h2>Resumen</h2>
     <div class="kpis" id="kpis"></div>
-    <div class="hint" id="refInfo"></div>
+    <div class="hint" id="refInfo" style="margin-top:4px;font-size:11px"></div>
   </div>
   <div class="card">
     <div class="tabs" id="tabs"></div>
@@ -149,6 +170,7 @@ td input.warn{border-color:var(--er);background:#fdeceb}
     <div class="row" style="margin-top:12px">
       <button id="btnCompletar">Sugerir qué agregar para llenar el vehículo</button>
       <button class="sec" id="btnSug">Cargar agotados sugeridos</button>
+      <button id="btnImprimir">Imprimir listado de cargue</button>
       <button class="sec" id="btnPlanXls">Descargar plan en Excel</button>
       <button class="dng" id="btnVaciar">Vaciar plan</button>
     </div>
@@ -184,6 +206,7 @@ td input.warn{border-color:var(--er);background:#fdeceb}
 </section>
 </main>
 
+<div id="printArea"></div>
 <script>
 const $=id=>document.getElementById(id);
 const DAY=86400000, SER=25569;
@@ -458,10 +481,10 @@ function asegurar(){
 
 /* ---------- Presentación del análisis ---------- */
 const COLS={
- traer:[['acc',''],['ref','Referencia'],['desc','Descripción'],['marca','Marca'],['grupo','Grupo shopper'],['est','Estado'],['p','Stock general (07001)','n'],['dia','Venta diaria','n'],['cob','Cobertura (días)','n'],['l','Stock externa (07X1E)','n'],['sug','Traer de externa','n'],['falt','Aún faltante','n']],
- llevar:[['acc',''],['ref','Referencia'],['desc','Descripción'],['marca','Marca'],['grupo','Grupo shopper'],['motivo','Motivo'],['p','Stock general (07001)','n'],['r','Rentas (07005)','n'],['l','Externa lista (07X1E)','n'],['s','Por estampillar (07X1R)','n'],['dsm','Días sin salida','n'],['sug','Llevar a externa','n']],
- perec:[['ref','Referencia'],['desc','Descripción'],['marca','Marca'],['grupo','Grupo shopper'],['motivo','Motivo'],['p','Stock general (07001)','n'],['dia','Venta diaria','n'],['cob','Cobertura (días)','n'],['dsm','Días sin salida','n'],['sug','Unidades en riesgo','n']],
- ofertas:[['ref','Referencia'],['desc','Descripción'],['marca','Marca'],['grupo','Grupo shopper'],['est','Situación'],['p','Stock general (07001)','n'],['r','Rentas (07005)','n'],['l','Externa lista (07X1E)','n'],['s','Por estampillar (07X1R)','n'],['dia','Venta diaria','n'],['cob','Cobertura (días)','n'],['dsm','Días sin salida','n']]
+ traer:[['acc',''],['ref','Ref.'],['desc','Descripción'],['grupo','Grupo shopper'],['est','Estado'],['p','Stock general','n'],['dia','Venta diaria','n'],['cob','Cobert. (días)','n'],['l','Stock 07X1E','n'],['sug','Traer','n'],['falt','Falta','n']],
+ llevar:[['acc',''],['ref','Ref.'],['desc','Descripción'],['grupo','Grupo shopper'],['motivo','Motivo'],['p','Stock general','n'],['r','Rentas 07005','n'],['l','Ext. lista 07X1E','n'],['s','Por estamp. 07X1R','n'],['dsm','Días sin salida','n'],['sug','Llevar','n']],
+ perec:[['ref','Ref.'],['desc','Descripción'],['grupo','Grupo shopper'],['motivo','Motivo'],['p','Stock general','n'],['dia','Venta diaria','n'],['cob','Cobert. (días)','n'],['dsm','Días sin salida','n'],['sug','En riesgo','n']],
+ ofertas:[['ref','Ref.'],['desc','Descripción'],['grupo','Grupo shopper'],['est','Situación'],['p','Stock general','n'],['r','Rentas 07005','n'],['l','Ext. lista 07X1E','n'],['s','Por estamp. 07X1R','n'],['dia','Venta diaria','n'],['cob','Cobert. (días)','n'],['dsm','Días sin salida','n']]
 };
 const NOM={traer:'Agotados: reponer en general',llevar:'Llevar a externa',perec:'Perecederos (no mover)',ofertas:'Otras ofertas (OF) · solo análisis'};
 function render(){
@@ -489,7 +512,8 @@ function tabla(){
   $('tbl').innerHTML='<tr>'+cols.map(c=>`<th class="${c[2]||''}" data-sort="${c[0]}">${c[1]}</th>`).join('')+'</tr>'+
    d.map(r=>'<tr>'+cols.map(c=>{
      const v=r[c[0]];
-     if(c[0]==='acc')return `<td><button class="sm sec" data-add="${tab}" data-k="${esc(r.k)}">+ Traslado</button></td>`;
+     if(c[0]==='acc')return `<td><button class="sm sec" data-add="${tab}" data-k="${esc(r.k)}" title="Agregar al plan de traslado">+ Plan</button></td>`;
+     if(c[0]==='desc')return `<td class="d">${esc(r.desc)}${r.marca?`<small>${esc(r.marca)}</small>`:''}</td>`;
      if(c[0]==='est'||c[0]==='motivo'){const cl=/^Agotado/.test(v)?'t-er':/Por agotarse|Exceso/.test(v)?'t-wa':'t-ok';return `<td><span class="tag ${cl}">${esc(v)}</span></td>`}
      return `<td class="${c[2]||''}">${fmt(c[0],v)}</td>`}).join('')+'</tr>').join('');
 }
@@ -507,7 +531,7 @@ $('btnRun').onclick=()=>{
 $('btnXls').onclick=()=>{
   if(!res)return;const wb=XLSX.utils.book_new();
   for(const k of Object.keys(NOM)){
-    const cols=COLS[k].filter(c=>c[0]!=='acc');
+    const cols=[];for(const c of COLS[k]){if(c[0]==='acc')continue;cols.push(c);if(c[0]==='desc')cols.push(['marca','Marca'])}
     const aoa=[cols.map(c=>c[1])].concat(res[k].map(r=>cols.map(c=>{const v=r[c[0]];return typeof v==='number'&&(c[0]==='dia'||c[0]==='cob')?+v.toFixed(2):v})));
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),NOM[k].replace(/[:\\\/?*\[\]]/g,'-').slice(0,31));
   }
@@ -563,7 +587,7 @@ function pintarPlan(){
     const max=it?(x.dir==='traer'?it.l:it.p):0;
     const g=pesoG(x.k),w=pesoKg(x.k,x.qty);
     const org=x.org==='sug'?['Sugerido','t-ok']:x.org==='comp'?['Completar peso','t-wa']:['Manual','t-er'];
-    return `<tr><td>${esc(x.ref)}</td><td>${esc(x.desc)}</td><td>${esc(x.grupo)}</td><td><span class="tag ${org[1]}">${org[0]}</span></td>
+    return `<tr><td>${esc(x.ref)}</td><td class="d">${esc(x.desc)}${it&&it.marca?`<small>${esc(it.marca)}</small>`:''}</td><td>${esc(x.grupo)}</td><td><span class="tag ${org[1]}">${org[0]}</span></td>
       <td class="n">${fn(max)}</td><td class="n">${it?it.dia.toFixed(1):'—'}</td>
       <td class="n"><input type="number" min="0" step="1" value="${g==null?'':g}" placeholder="—" data-f="peso" data-k="${esc(x.k)}"></td>
       <td class="n"><input type="number" min="0" step="1" value="${x.qty}" class="${x.qty>max?'warn':''}" title="${x.qty>max?'Supera el stock disponible ('+fn(max)+')':''}" data-f="qty" data-k="${esc(x.k)}" data-d="${x.dir}"></td>
@@ -635,8 +659,9 @@ function pintarCat(){
   $('tCat').innerHTML=H+r.map(it=>{
     const e=enPlan(it.k,dir),sug=sugDe(it),gp=pesoG(it.k),w=e?pesoKg(it.k,e.qty):null,max=dir==='traer'?it.l:it.p;
     const mot=lv.get(it.k),cinp=`<td class="n"><input type="number" min="0" step="1" value="${e?e.qty:''}" placeholder="0" class="${e&&e.qty>max?'warn':''}" title="${e&&e.qty>max?'Supera el stock disponible':''}" data-cat="${esc(it.k)}" data-d="${dir}"></td><td class="n">${w==null?'—':fk(w)}</td><td>${sug>0?`<button class="sm sec" data-cats="${esc(it.k)}" data-d="${dir}">Usar sugerido</button>`:''}</td>`;
-    if(dir==='traer')return `<tr><td>${esc(it.ref)}</td><td>${esc(it.desc)}</td><td>${esc(it.grupo||'Sin grupo')}</td><td class="n">${fn(it.l)}</td><td class="n">${fn(it.p)}</td><td class="n">${it.dia.toFixed(1)}</td><td class="n">${it.cob==null?'—':it.cob.toFixed(1)}</td><td class="n">${sug>0?fn(sug):'—'}</td><td class="n">${gp==null?'—':fn(gp)}</td>${cinp}</tr>`;
-    return `<tr><td>${esc(it.ref)}</td><td>${esc(it.desc)}</td><td>${esc(it.grupo||'Sin grupo')}</td><td class="n">${fn(it.p)}</td><td class="n">${it.dia.toFixed(1)}</td><td class="n">${it.cob==null?'—':it.cob.toFixed(1)}</td><td class="n">${it.dsm==null?'Sin ventas':it.dsm}</td><td>${mot?`<span class="tag ${mot.motivo==='Exceso'?'t-wa':'t-ok'}">${mot.motivo}</span>`:'—'}</td><td class="n">${sug>0?fn(sug):'—'}</td><td class="n">${gp==null?'—':fn(gp)}</td>${cinp}</tr>`}).join('');
+    const dd=`<td class="d">${esc(it.desc)}${it.marca?`<small>${esc(it.marca)}</small>`:''}</td>`;
+    if(dir==='traer')return `<tr><td>${esc(it.ref)}</td>${dd}<td>${esc(it.grupo||'Sin grupo')}</td><td class="n">${fn(it.l)}</td><td class="n">${fn(it.p)}</td><td class="n">${it.dia.toFixed(1)}</td><td class="n">${it.cob==null?'—':it.cob.toFixed(1)}</td><td class="n">${sug>0?fn(sug):'—'}</td><td class="n">${gp==null?'—':fn(gp)}</td>${cinp}</tr>`;
+    return `<tr><td>${esc(it.ref)}</td>${dd}<td>${esc(it.grupo||'Sin grupo')}</td><td class="n">${fn(it.p)}</td><td class="n">${it.dia.toFixed(1)}</td><td class="n">${it.cob==null?'—':it.cob.toFixed(1)}</td><td class="n">${it.dsm==null?'Sin ventas':it.dsm}</td><td>${mot?`<span class="tag ${mot.motivo==='Exceso'?'t-wa':'t-ok'}">${mot.motivo}</span>`:'—'}</td><td class="n">${sug>0?fn(sug):'—'}</td><td class="n">${gp==null?'—':fn(gp)}</td>${cinp}</tr>`}).join('');
   $('twCat').scrollTop=sc;
   $('cInfo').textContent=(tot>200?`Se muestran 200 de ${tot} productos; use el buscador o los filtros para afinar. `:`${tot} producto(s) disponibles. `)+(dir==='traer'?'Ordenados: primero los que necesitan reposición, de menor a mayor cobertura.':'Ordenados: primero los excesos y sin rotación, de mayor a menor cantidad sugerida. Los perecederos no se pueden llevar a la externa.');
 }
@@ -725,6 +750,39 @@ $('btnPlanXls').onclick=()=>{
   }
   XLSX.writeFile(wb,'plan_traslado_armenia_'+new Date().toISOString().slice(0,10)+'.xlsx');
 };
+/* ---------- Listado de cargue imprimible ---------- */
+function imprimir(){
+  if(!asegurar())return;
+  const dirs=['traer','llevar'].filter(d=>S.plan.some(x=>x.dir===d&&x.qty>0));
+  if(!dirs.length){mensaje('No hay productos seleccionados para imprimir.',true);return}
+  const cap=capKg(),ahora=new Date().toLocaleString('es-CO',{dateStyle:'long',timeStyle:'short'});
+  $('printArea').innerHTML=dirs.map((d,i)=>{
+    const rows=S.plan.filter(x=>x.dir===d&&x.qty>0).sort((a,b)=>(a.grupo||'').localeCompare(b.grupo||'')||a.desc.localeCompare(b.desc));
+    const t=totales(d),e=estadoCarga(d);
+    const filas=rows.map((x,n)=>{const w=pesoKg(x.k,x.qty);
+      return `<tr><td class="n">${n+1}</td><td>${esc(x.ref)}</td><td>${esc(x.desc)}</td><td>${esc(x.grupo)}</td><td class="n">${fn(x.qty)}</td><td class="n">${w==null?'—':fk(w)}</td><td class="c">☐</td><td></td></tr>`}).join('');
+    return `<div class="pr ${i<dirs.length-1?'pg':''}">
+      <h1>Listado de cargue · Bodega Armenia</h1>
+      <div class="meta">
+        <div><b>Fecha:</b> ${esc(ahora)}</div>
+        <div><b>Movimiento:</b> ${d==='traer'?'Traer de la externa a la general':'Llevar de la general a la externa'}</div>
+        <div><b>Origen:</b> ${d==='traer'?'Bodega externa (07X1E)':'Bodega general (07001)'}</div>
+        <div><b>Destino:</b> ${d==='traer'?'Bodega general (07001)':'Bodega externa'}</div>
+        <div><b>Vehículos:</b> ${S.cfg.veh} × ${fn(S.cfg.cap)} kg = ${fn(cap)} kg</div>
+        <div><b>Peso del cargue:</b> ${fk(t.kg)} kg (${fk(t.kg/cap*100)}% de la capacidad)</div>
+        <div><b>Referencias:</b> ${t.n} · <b>Unidades:</b> ${fn(t.u)}</div>
+        <div><b>Estado:</b> ${esc(e.tit)}</div>
+      </div>
+      <table><tr><th class="n">#</th><th>Referencia</th><th>Descripción</th><th>Grupo shopper</th><th class="n">Cantidad (unid.)</th><th class="n">Peso (kg)</th><th class="c">Cargado</th><th>Observaciones</th></tr>${filas}
+        <tr><td colspan="4" class="n"><b>Total</b></td><td class="n"><b>${fn(t.u)}</b></td><td class="n"><b>${fk(t.kg)}</b></td><td></td><td></td></tr></table>
+      ${t.sin?`<p style="font-size:11px">Nota: ${t.sin} referencia(s) sin peso registrado no se incluyen en el peso total.</p>`:''}
+      <div class="firmas"><div>Alistó</div><div>Conductor</div><div>Recibió</div></div>
+    </div>`}).join('');
+  const titulo=document.title;document.title='Listado de cargue Armenia '+new Date().toISOString().slice(0,10);
+  window.print();
+  setTimeout(()=>{document.title=titulo},1500);
+}
+$('btnImprimir').onclick=imprimir;
 /* búsqueda para agregar a mano */
 $('aQ').oninput=buscar;$('aDir').onchange=buscar;
 function buscar(){
