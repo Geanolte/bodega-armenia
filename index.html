@@ -420,6 +420,9 @@ const GRUPOS_EXCL=/^0 |^7 /;
 const PREFIJOS_EXCL=['ENV','MP','BOL','PM'];
 const PREFIJO_OF='OF';
 const DESC_EXCL=/^(DUO\s+|MALETA\s+)?COPAS?\b/i;
+const INV_V=2;   // versión del formato guardado del inventario (2 = convierte cajas a unidades y guarda la unidad de empaque)
+const invViejo=()=>!!(S.inv&&S.inv.v!==INV_V);
+const avisoInvViejo=()=>invViejo()?`<div class="msg" style="margin:0 0 14px;background:var(--bad-bg);color:#8c1a14;align-items:center;flex-wrap:wrap">${ico('alert')}<span style="flex:1;min-width:220px"><b>Las existencias guardadas son de una versión anterior de la aplicación</b> y pueden estar mal convertidas (cajas contadas como unidades). Vuelva a cargar el reporte de inventario para corregirlo.</span><button class="btn sm" data-v="datos">Cargar existencias</button></div>`:'';
 const CFG0={win:90,min:7,tar:30,nomov:60,max:120,veh:1,cap:2000,fill:95,vinfo:[],cajasU:{}};   // vehículos: capacidad en kg (2 TN por defecto)
 
 /* ---------- Iconos ---------- */
@@ -559,7 +562,7 @@ $('fInv').onchange=async e=>{
     rows.push([ref,nfx(r[c.des]),b,fc>1?Math.round(qn*fc):qn,c.gr?nfx(r[c.gr]):'',c.ma?nfx(r[c.ma]).replace(/^\d+\s*-\s*/,''):'',
       c.pe&&/^s[ií]/i.test(nfx(r[c.pe]))?1:0,c.fe?num(r[c.fe]):0,c.ps?num(r[c.ps]):0,c.bc?nfx(r[c.bc]):'',fc>1?fc:0]);
   }
-  S.inv={rows,archivo:f.name,cargado:Date.now(),sinPeso:!c.ps,enCajas};
+  S.inv={rows,archivo:f.name,cargado:Date.now(),sinPeso:!c.ps,enCajas,v:INV_V};
   await guardar('inv',S.inv);dirty=true;pintarDatos();
   aviso('Existencias cargadas: '+rows.length.toLocaleString('es-CO')+' filas.');
 };
@@ -638,8 +641,10 @@ function pintarDatos(){
     chip('cInv',r.dias===0?'ok':'warn',(r.dias===0?ico('check'):ico('alert'))+' Cargadas '+r.txt);
     setSt('sInv',S.inv.archivo+' · '+S.inv.rows.length.toLocaleString('es-CO')+' filas'+(S.inv.enCajas?' · existencias en cajas convertidas a unidades':''));
     $('upInv').classList.add('done');
+    if(invViejo()){chip('cInv','bad',ico('alert')+' Conviene volver a cargarlas');$('upInv').classList.remove('done')}
     if(r.dias>0)w.push('Las existencias se cargaron '+r.txt+'. Para decidir con el inventario de hoy, cargue el reporte actualizado.');
     if(S.inv.sinPeso)w.push('El inventario no trae la columna «PESO INDIVIDUAL»: no se podrá calcular el peso de la carga.');
+    if(invViejo())w.push('Las existencias guardadas se cargaron con una versión anterior de la aplicación y pueden estar mal convertidas (cajas contadas como unidades). Vuelva a cargar el reporte de inventario.');
   }else{chip('cInv','mut','Falta cargar');setSt('sInv','');$('upInv').classList.remove('done')}
   if(S.mov){
     const dm=hoy-S.mov.hasta;
@@ -987,7 +992,7 @@ function pintarQue(){
   const nSel=(kind==='traer'||kind==='llevar')?res[kind].filter(r=>enPlan(r.k,kind)).length:0;
   $('expl').innerHTML=`<span class="ic">${ico(ei)}</span><div>${et}${nSel?` <b>Ya agregó ${nSel} al viaje.</b>`:''}</div>`;
   const nSin=(kind==='traer'||kind==='llevar')?res[kind].filter(r=>!(r.caja>=1)).length:0;
-  $('aviCaja').innerHTML=nSin?avisoCaja(nSin):'';
+  $('aviCaja').innerHTML=avisoInvViejo()+(nSin?avisoCaja(nSin):'');
   // grupos del listado
   const gs=[...new Set(res[kind].map(r=>r.grupo))].sort(),prev=$('fGrupo').value;
   $('fGrupo').innerHTML='<option value="">Todos los grupos</option>'+gs.map(g=>`<option>${esc(g)}</option>`).join('');
@@ -1063,7 +1068,7 @@ function pintarCat(){
     $('cGrupo').innerHTML='<option value="">Todos los grupos</option>'+gs.map(x=>`<option>${esc(x)}</option>`).join('');
     if(gs.includes(prev))$('cGrupo').value=prev}
   const nSin=all.filter(sinCaja).length;
-  $('cAvi').innerHTML=nSin?avisoCaja(nSin):'';
+  $('cAvi').innerHTML=avisoInvViejo()+(nSin?avisoCaja(nSin):'');
   let r=all.filter(it=>(!$('cGrupo').value||(it.grupo||'Sin grupo')===$('cGrupo').value)&&(!nec||(dir==='traer'?it.need>0:lv.has(it.k)))&&(!soloSin||sinCaja(it))&&(!q||it.ref.toLowerCase().includes(q)||it.desc.toLowerCase().includes(q)||(it.marca||'').toLowerCase().includes(q)||(it.barras||'').includes(q)));
   if(dir==='traer')r.sort((a,b)=>((b.need>0)-(a.need>0))||((a.cob??1e9)-(b.cob??1e9))||b.dia-a.dia);
   else r.sort((a,b)=>(lv.has(b.k)-lv.has(a.k))||((lv.get(b.k)?lv.get(b.k).sug:0)-(lv.get(a.k)?lv.get(a.k).sug:0))||b.p-a.p);
