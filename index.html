@@ -203,21 +203,43 @@ dialog::backdrop{background:rgba(13,13,13,.55)}
 .db dt{font-weight:700;margin-top:10px}
 .db dd{margin:2px 0 0;color:var(--mut)}
 
-/* impresión del listado de cargue */
+/* impresión del listado de cargue: carta HORIZONTAL, solo blanco y negro, letra grande.
+   Cada vehículo empieza en una hoja nueva (aunque ocupe media hoja) para no tener que recortar. */
 #printArea{display:none}
-.pr{color:#000;font:12px/1.35 Arial,sans-serif}
-.pr h1{font-size:17px;margin:0 0 6px;color:#000}
-.pr .meta{display:grid;grid-template-columns:repeat(2,1fr);gap:3px 24px;margin:6px 0 10px;font-size:12px}
-.pr table{width:100%;border-collapse:collapse}
-.pr th,.pr td{border:1px solid #444;padding:4px 6px;font-size:11px;white-space:normal;background:#fff;color:#000;text-align:left}
-.pr th{background:#E4DCCB!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.pr td.n,.pr th.n{text-align:right}
-.pr td.c{text-align:center;width:48px}
-.pr .firmas{display:flex;gap:30px;margin-top:34px}
-.pr .firmas div{flex:1;border-top:1px solid #000;padding-top:4px;font-size:11px}
-.pr .pg{page-break-after:always}
+.pr{color:#000;font-family:Arial,Helvetica,sans-serif;font-size:12pt;line-height:1.3;break-after:page;page-break-after:always}
+.pr:last-child{break-after:auto;page-break-after:auto}
+.pr .cab{display:flex;gap:7mm;align-items:stretch;margin-bottom:2.5mm}
+.pr .veh{border:3pt solid #000;padding:.8mm 6mm;text-align:center;flex:none;min-width:52mm}
+.pr .veh small{display:block;font-size:10pt;font-weight:800;letter-spacing:.8pt;text-transform:uppercase}
+.pr .veh b{display:block;font-size:27pt;line-height:1.05;font-weight:900}
+.pr .veh span{display:block;font-size:11pt;font-weight:800}
+.pr h1{font-size:17pt;margin:0;font-weight:900;color:#000;line-height:1.15}
+.pr .sub2{font-size:11pt;margin:0 0 1.6mm;font-weight:700}
+.pr .meta{display:grid;grid-template-columns:1fr 1fr;gap:.8mm 7mm;font-size:11pt}
+.pr .meta b{font-weight:800}
+.pr table.lt{width:100%;border-collapse:collapse;table-layout:fixed}
+.pr .lt th,.pr .lt td{border:1.2pt solid #000;padding:1.1mm 2mm;background:#fff;color:#000;text-align:left;vertical-align:middle;word-break:break-word}
+.pr .lt thead{display:table-header-group}
+.pr .lt tr{break-inside:avoid;page-break-inside:avoid}
+.pr .lt .idr th{border:0;border-bottom:2.5pt solid #000;padding:0 0 1.5mm;font-size:11.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.2pt}
+.pr .lt .ch th{font-size:10pt;font-weight:900;text-transform:uppercase;border-bottom:2.5pt solid #000;word-break:normal;overflow-wrap:normal;hyphens:none;padding-left:1.4mm;padding-right:1.4mm}
+.pr .lt td{height:9.5mm;font-size:12pt}
+.pr .lt .n{text-align:right}
+.pr .lt .ct{text-align:center}
+.pr .lt .nm{text-align:center;font-weight:800}
+.pr .lt .ds{font-size:12pt;font-weight:800;line-height:1.15}
+.pr .lt .rf{font-weight:700}
+.pr .lt .bc{font-family:"Courier New",Courier,monospace;font-weight:900;font-size:12.5pt;letter-spacing:.2pt}
+.pr .lt .cj{font-size:17pt;font-weight:900;text-align:right}
+.pr .lt .un{font-size:12.5pt;font-weight:700;text-align:right}
+.pr .lt .box{display:inline-block;width:6.5mm;height:6.5mm;border:2pt solid #000;vertical-align:middle}
+.pr .lt .tot td{border-top:3pt solid #000;font-weight:900;font-size:12.5pt;height:8.5mm}
+.pr .lt .tot .cj{font-size:17pt}
+.pr .notas{margin:2mm 0 0;font-size:10pt}
+.pr .firmas{display:flex;gap:16mm;margin-top:5mm;break-inside:avoid;page-break-inside:avoid}
+.pr .firmas div{flex:1;border-top:1.5pt solid #000;padding-top:1mm;font-size:11pt;font-weight:800;text-transform:uppercase}
 @media print{
-  @page{size:letter portrait;margin:12mm}
+  @page{size:letter landscape;margin:7mm 10mm}
   body{background:#fff}
   .top,main,.barv,#toast,dialog{display:none!important}
   #printArea{display:block}
@@ -1155,38 +1177,49 @@ function imprimir(){
   const dirs=[dirT].filter(d=>S.plan.some(x=>x.dir===d&&x.qty>0));
   if(!dirs.length){aviso('No hay productos en el viaje para imprimir.',true);return}
   const cap=+S.cfg.cap||2000,nveh=Math.max(1,Math.round(+S.cfg.veh||1)),ahora=new Date().toLocaleString('es-CO',{dateStyle:'long',timeStyle:'short'});
+  const hoyTxt=new Date().toLocaleString('es-CO',{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
   const paginas=[];
   for(const d of dirs){
     const {V}=distribuir(d);
     const mov=d==='traer'?'Traer de la externa a la general':'Llevar de la general a la externa';
     const org=d==='traer'?'Bodega externa (07X1E)':'Bodega general (07001)',dst=d==='traer'?'Bodega general (07001)':'Bodega externa';
-    const pagina=(titulo,items,info,estado,kg,u)=>{
+    // Un listado por vehículo; cada uno en hojas propias (nunca comparte hoja con otro vehículo).
+    const pagina=(v,vi)=>{
+      const items=v.items,kg=v.kg,u=v.u,estado=estadoKg(kg,cap).tit;
+      const etq=nveh>1?`Vehículo ${v.n} de ${nveh}`:'Vehículo';
       const filas=items.map((it,n)=>{const cj=cajaDe(it.x.k),im=res.items.get(it.x.k)||{};
-        return `<tr><td class="n">${n+1}</td><td>${esc(it.x.ref)}</td><td>${esc(it.x.desc)}</td><td>${esc(im.barras||'—')}</td><td class="n"><b>${cj?cajasTxt(it.qty,cj):'—'}</b></td><td class="n">${fn(it.qty)}</td><td class="n">${it.kg==null?'—':fk(it.kg)}</td><td class="c">☐</td><td></td></tr>`}).join('');
+        return `<tr><td class="nm">${n+1}</td><td class="rf">${esc(it.x.ref)}</td><td class="ds">${esc(it.x.desc)}</td><td class="bc">${esc(im.barras||'SIN CÓDIGO')}</td><td class="cj">${cj?cajasTxt(it.qty,cj):'—'}</td><td class="un">${fn(it.qty)}</td><td class="n">${it.kg==null?'—':fk(it.kg)}</td><td class="ct"><span class="box"></span></td><td></td></tr>`}).join('');
       const sin=items.filter(it=>it.kg==null).length;
       const totCj=items.reduce((s,it)=>{const cj=cajaDe(it.x.k);return s+(cj?it.qty/cj:0)},0),sinCj=items.filter(it=>!cajaDe(it.x.k)).length;
-      return `<div class="pr pg">
-        <h1>Listado de cargue · Bodega Armenia · ${esc(titulo)}</h1>
-        <div class="meta">
-          <div><b>Fecha:</b> ${esc(ahora)}</div>
-          <div><b>Movimiento:</b> ${mov}</div>
-          <div><b>Origen:</b> ${org}</div>
-          <div><b>Destino:</b> ${dst}</div>
-          ${info}
-          <div><b>Referencias:</b> ${items.length} · <b>Unidades:</b> ${fn(u)}</div>
-          <div><b>Estado:</b> ${esc(estado)}</div>
+      return `<section class="pr">
+        <div class="cab">
+          <div class="veh"><small>Listado de cargue</small><b>${nveh>1?v.n+' de '+nveh:'1'}</b><span>${vi?esc(vi):etq}</span></div>
+          <div style="flex:1"><h1>${esc(mov)}</h1>
+            <p class="sub2">Bodega Armenia · ${esc(hoyTxt)}</p>
+            <div class="meta">
+              <div><b>Origen:</b> ${org}</div>
+              <div><b>Destino:</b> ${dst}</div>
+              <div><b>Peso:</b> ${fk(kg)} de ${fn(cap)} kg (${fk(kg/cap*100)}%)</div>
+              <div><b>${items.length}</b> productos · <b>${cajasTxt(totCj,1)}</b> cajas · <b>${fn(u)}</b> unidades</div>
+            </div>
+          </div>
         </div>
-        <table><tr><th class="n">#</th><th>Referencia</th><th>Descripción</th><th>Código de barras</th><th class="n">Cajas</th><th class="n">Unidades</th><th class="n">Peso (kg)</th><th class="c">Cargado</th><th>Observaciones</th></tr>${filas}
-          <tr><td colspan="4" class="n"><b>Total</b></td><td class="n"><b>${cajasTxt(totCj,1)}</b></td><td class="n"><b>${fn(u)}</b></td><td class="n"><b>${fk(kg)}</b></td><td></td><td></td></tr></table>
-        ${sin?`<p style="font-size:11px">Nota: ${sin} línea(s) sin peso registrado no se incluyen en el peso total.</p>`:''}
-        ${sinCj?`<p style="font-size:11px">Nota: ${sinCj} línea(s) sin tamaño de caja registrado (columna Cajas en «—»); su cantidad va en unidades.</p>`:''}
+        <table class="lt">
+          <colgroup><col style="width:4.5%"><col style="width:7.5%"><col style="width:32%"><col style="width:15.5%"><col style="width:7.5%"><col style="width:7.5%"><col style="width:7.5%"><col style="width:9%"><col style="width:9%"></colgroup>
+          <thead>
+            <tr class="idr"><th colspan="9">${esc(etq)}${vi?' · '+esc(vi):''} · ${esc(mov)}</th></tr>
+            <tr class="ch"><th class="ct">#</th><th>Ref.</th><th>Producto</th><th>Cód. barras</th><th class="n">Cajas</th><th class="n">Und.</th><th class="n">Kg</th><th class="ct">Cargado</th><th>Notas</th></tr>
+          </thead>
+          <tbody>${filas}
+            <tr class="tot"><td colspan="4" class="n">TOTAL ${esc(etq.toUpperCase())}</td><td class="cj">${cajasTxt(totCj,1)}</td><td class="un">${fn(u)}</td><td class="n">${fk(kg)}</td><td></td><td></td></tr>
+          </tbody>
+        </table>
+        <div class="notas">Estado de la carga: <b>${esc(estado)}</b>.${sin?` ${sin} línea(s) sin peso registrado no se incluyen en el peso.`:''}${sinCj?` ${sinCj} línea(s) sin tamaño de caja: su cantidad va en unidades (Cajas en «—»).`:''}</div>
         <div class="firmas"><div>Alistó</div><div>Conductor</div><div>Recibió</div></div>
-      </div>`};
+      </section>`};
     for(const v of V){
       if(!v.items.length)continue;
-      const vi=(S.cfg.vinfo&&S.cfg.vinfo[v.n-1])||'';
-      const info=`<div><b>Vehículo:</b> ${v.n} de ${nveh}${vi?' · '+esc(vi):''}</div><div><b>Capacidad:</b> ${fn(cap)} kg · <b>Peso del cargue:</b> ${fk(v.kg)} kg (${fk(v.kg/cap*100)}%)</div>`;
-      paginas.push(pagina(nveh>1?`Vehículo ${v.n} de ${nveh}`:'Vehículo 1',v.items,info,estadoKg(v.kg,cap).tit,v.kg,v.u));
+      paginas.push(pagina(v,(S.cfg.vinfo&&S.cfg.vinfo[v.n-1])||''));
     }
   }
   $('printArea').innerHTML=paginas.join('');
