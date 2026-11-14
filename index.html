@@ -319,17 +319,20 @@ $('fInv').onchange=async e=>{
   const rs=await leer(f);if(!rs.length){setSt('sInv','El archivo está vacío');return}
   const h=Object.keys(rs[0]);
   const c={ref:colf(h,/^referencia/i),des:colf(h,/desc\. item/i),bod:colf(h,/^bodega$/i),can:colf(h,/disponible/i),
-    gr:colf(h,/grupo shopper/i),ma:colf(h,/^marca/i),fe:colf(h,/fecha .ltima entrada/i),pe:colf(h,/perecedero/i),ps:colf(h,/peso individual/i),bc:colf(h,/c.digo barra/i)};
+    gr:colf(h,/grupo shopper/i),ma:colf(h,/^marca/i),fe:colf(h,/fecha .ltima entrada/i),pe:colf(h,/perecedero/i),ps:colf(h,/peso individual/i),bc:colf(h,/c.digo barra/i),fa:colf(h,/^factor u\.?\s?m\.?$/i)};
   const falta=['ref','des','bod','can'].filter(k=>!c[k]);
   if(falta.length){setSt('sInv','No encontré las columnas: Referencia, Desc. item, Bodega y Cant. disponible');return}
-  const rows=[];
+  const rows=[];let enCajas=0;
   for(const r of rs){
     const b=nfx(r[c.bod]);if(!BODEGAS[b])continue;
     const ref=nfx(r[c.ref]);if(!ref)continue;
-    rows.push([ref,nfx(r[c.des]),b,num(r[c.can]),c.gr?nfx(r[c.gr]):'',c.ma?nfx(r[c.ma]).replace(/^\d+\s*-\s*/,''):'',
-      c.pe&&/^s[ií]/i.test(nfx(r[c.pe]))?1:0,c.fe?num(r[c.fe]):0,c.ps?num(r[c.ps]):0,c.bc?nfx(r[c.bc]):'']);
+    // Si el archivo trae las existencias en cajas (U.M. «CAJA(12)», Factor U.M. = unidades por caja), se convierten a unidades.
+    const fct=c.fa?num(r[c.fa]):1,fc=fct>1?fct:1,qn=num(r[c.can]);
+    if(fc>1)enCajas++;
+    rows.push([ref,nfx(r[c.des]),b,fc>1?Math.round(qn*fc):qn,c.gr?nfx(r[c.gr]):'',c.ma?nfx(r[c.ma]).replace(/^\d+\s*-\s*/,''):'',
+      c.pe&&/^s[ií]/i.test(nfx(r[c.pe]))?1:0,c.fe?num(r[c.fe]):0,c.ps?num(r[c.ps]):0,c.bc?nfx(r[c.bc]):'',fc>1?fc:0]);
   }
-  S.inv={rows,archivo:f.name,cargado:Date.now(),sinPeso:!c.ps};
+  S.inv={rows,archivo:f.name,cargado:Date.now(),sinPeso:!c.ps,enCajas};
   await guardar('inv',S.inv);dirty=true;pintarDatos();
 };
 
@@ -390,7 +393,7 @@ $('fOf').onchange=async e=>{
 
 function pintarDatos(){
   const w=[];
-  if(S.inv){setSt('sInv',S.inv.archivo+' · '+S.inv.rows.length.toLocaleString('es-CO')+' filas · cargado '+fdt(S.inv.cargado));
+  if(S.inv){setSt('sInv',S.inv.archivo+' · '+S.inv.rows.length.toLocaleString('es-CO')+' filas · cargado '+fdt(S.inv.cargado)+(S.inv.enCajas?' · existencias en cajas convertidas a unidades ('+S.inv.enCajas.toLocaleString('es-CO')+' filas)':''));
     if(S.inv.sinPeso)w.push('El inventario no trae la columna «PESO INDIVIDUAL»: el peso del traslado no se podrá calcular.')}
   else setSt('sInv','Sin cargar');
   if(S.mov)setSt('sMov','Del '+fd(S.mov.desde)+' al '+fd(S.mov.hasta)+' · '+S.mov.rows.length.toLocaleString('es-CO')+' registros diarios · actualizado '+fdt(S.mov.cargado));
@@ -425,13 +428,13 @@ function analizar(){
   const items=new Map(),excl=new Set();
   const bad=(ref,desc,gr)=>malo(ref)||DESC_EXCL.test(desc||'')||GRUPOS_EXCL.test(gr||'');
   const get=(k,ref,desc,gr,ma)=>{let it=items.get(k);
-    if(!it){it={k,ref,desc:desc||'',marca:ma||'',grupo:gr||'',p:0,r:0,l:0,s:0,tot:0,ult:null,ent:null,per:false,peso:0,barras:''};items.set(k,it)}
+    if(!it){it={k,ref,desc:desc||'',marca:ma||'',grupo:gr||'',p:0,r:0,l:0,s:0,tot:0,ult:null,ent:null,per:false,peso:0,barras:'',cajaInv:0};items.set(k,it)}
     else{if(!it.desc&&desc)it.desc=desc;if(!it.grupo&&gr)it.grupo=gr;if(!it.marca&&ma)it.marca=ma}return it};
-  for(const [ref,desc,bod,q,gr,ma,per,fent,peso,barras] of S.inv.rows){
+  for(const [ref,desc,bod,q,gr,ma,per,fent,peso,barras,fcaja] of S.inv.rows){
     const k=nk(ref);if(excl.has(k))continue;
     if(bad(ref,desc,gr)||ofv.has(k)){excl.add(k);items.delete(k);continue}   // las ofertas virtuales no tienen inventario físico
     const it=get(k,ref,desc,gr,ma);
-    if(per)it.per=true;if(peso&&!it.peso)it.peso=peso;if(barras&&!it.barras)it.barras=barras;
+    if(per)it.per=true;if(peso&&!it.peso)it.peso=peso;if(barras&&!it.barras)it.barras=barras;if(fcaja>1)it.cajaInv=fcaja;
     const rol=BODEGAS[bod];
     if(rol==='P'){it.p+=q;if(fent&&(!it.ent||fent>it.ent))it.ent=fent}
     else if(rol==='R')it.r+=q;else if(rol==='L')it.l+=q;else if(rol==='S')it.s+=q;
@@ -456,7 +459,7 @@ function analizar(){
     it.cob=it.dia>0?it.p/it.dia:null;
     it.need=it.dia>0?Math.ceil(Math.max(tar*it.dia-it.p,0)):0;
     const oferta=esOF(it.ref);
-    it.caja=(S.mov.cajas&&S.mov.cajas[it.k])||0;   // unidades por caja (0 = no se conoce)
+    it.caja=it.cajaInv||(S.mov.cajas&&S.mov.cajas[it.k])||0;   // unidades por caja: primero la del inventario, luego la de los movimientos (0 = no se conoce)
     const cj=it.caja>1?it.caja:1;
     const base={k:it.k,ref:it.ref,desc:it.desc,marca:it.marca,grupo:it.grupo||'Sin grupo',barras:it.barras,caja:it.caja,p:it.p,r:it.r,l:it.l,s:it.s,dia:it.dia,cob:it.cob,dsm:it.dsm};
     const estados=[];
