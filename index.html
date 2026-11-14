@@ -129,6 +129,7 @@ details.adv .body{padding:4px 0 16px}
 .pq{display:flex;gap:20px}
 .pq span{display:block;font-size:12px;color:var(--mut)}
 .pq b{font-size:19px}
+.pq small{display:block;font-size:12px;color:var(--mut)}
 .pa{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .pa .sg{font-size:13.5px}
 .pa .sg b{font-size:16px}
@@ -332,6 +333,7 @@ dialog::backdrop{background:rgba(13,13,13,.55)}
       <div class="mini" id="mini"></div>
       <div class="card">
         <div class="expl" id="expl"></div>
+        <div id="aviCaja"></div>
         <div class="fbar">
           <input type="search" id="q" placeholder="Buscar por nombre, referencia, código de barras o marca">
           <select id="fGrupo" aria-label="Grupo"></select>
@@ -357,6 +359,7 @@ dialog::backdrop{background:rgba(13,13,13,.55)}
         <div class="card">
           <h2 id="cTitulo"></h2>
           <p class="sub" id="cAyuda"></p>
+          <div id="cAvi"></div>
           <div class="fbar">
             <input type="search" id="cQ" placeholder="Buscar por nombre, referencia, código de barras o marca">
             <select id="cGrupo" aria-label="Grupo"></select>
@@ -390,7 +393,8 @@ dialog::backdrop{background:rgba(13,13,13,.55)}
       <dt>Exceso</dt><dd>Hay mucho más producto guardado del que se vende. Lo que sobra se puede llevar a la externa.</dd>
       <dt>Sin rotación</dt><dd>Lleva muchos días sin venderse.</dd>
       <dt>Días de venta</dt><dd>Cuántos días le alcanza el producto al ritmo de venta actual.</dd>
-      <dt>Caja</dt><dd>Se mueven cajas completas. La aplicación siempre muestra las cajas y las unidades.</dd>
+      <dt>Caja</dt><dd>Todo se cuenta en cajas completas; las unidades se muestran como apoyo. Cada caja trae un número de unidades (por ejemplo 12).</dd>
+      <dt>Unidad de empaque</dt><dd>Cuántas unidades trae una caja. Si un producto no la tiene, la aplicación lo marca con «Falta la unidad de empaque» y usted la indica una vez (con el botón «Indicar unidades por caja»). Queda guardada para todos. Si el producto se maneja suelto, escriba 1.</dd>
       <dt>Perecedero</dt><dd>Producto que se puede vencer. Nunca se lleva a la externa, porque desde allí no se factura.</dd>
       <dt>Bodega general (07001)</dt><dd>La que factura y despacha.</dd>
       <dt>Bodega externa (07X1E)</dt><dd>Mercancía lista y disponible, guardada fuera. Se puede traer a la general.</dd>
@@ -416,7 +420,7 @@ const GRUPOS_EXCL=/^0 |^7 /;
 const PREFIJOS_EXCL=['ENV','MP','BOL','PM'];
 const PREFIJO_OF='OF';
 const DESC_EXCL=/^(DUO\s+|MALETA\s+)?COPAS?\b/i;
-const CFG0={win:90,min:7,tar:30,nomov:60,max:120,veh:1,cap:2000,fill:95,vinfo:[]};   // vehículos: capacidad en kg (2 TN por defecto)
+const CFG0={win:90,min:7,tar:30,nomov:60,max:120,veh:1,cap:2000,fill:95,vinfo:[],cajasU:{}};   // vehículos: capacidad en kg (2 TN por defecto)
 
 /* ---------- Iconos ---------- */
 const IC={
@@ -494,7 +498,7 @@ function aplicar(loc){
   dirty=true;
 }
 const S={inv:null,mov:null,ofv:null,plan:[],pesos:{},cfg:{...CFG0}};
-let res=null,dirty=true,step='datos',lista='traer',dirT='traer',qShown=40,cShown=80;
+let res=null,dirty=true,step='datos',lista='traer',dirT='traer',qShown=40,cShown=80,soloSin=false;
 
 /* ---------- Utilidades ---------- */
 const nfx=s=>String(s==null?'':s).trim();
@@ -710,8 +714,9 @@ function analizar(){
     it.cob=it.dia>0?it.p/it.dia:null;
     it.need=it.dia>0?Math.ceil(Math.max(tar*it.dia-it.p,0)):0;
     const oferta=esOF(it.ref);
-    it.caja=it.cajaInv||(S.mov.cajas&&S.mov.cajas[it.k])||0;   // unidades por caja: primero la del inventario, luego la de los movimientos (0 = no se conoce)
-    const cj=it.caja>1?it.caja:1;
+    // unidades por caja: primero la que indicó la persona, luego la del inventario y luego la de los movimientos (0 = no se conoce)
+    it.caja=(S.cfg.cajasU&&S.cfg.cajasU[it.k])||it.cajaInv||(S.mov.cajas&&S.mov.cajas[it.k])||0;
+    const cj=it.caja>=1?it.caja:1;
     const base={k:it.k,ref:it.ref,desc:it.desc,marca:it.marca,grupo:it.grupo||'Sin grupo',barras:it.barras,caja:it.caja,p:it.p,r:it.r,l:it.l,s:it.s,dia:it.dia,cob:it.cob,dsm:it.dsm};
     const estados=[];
     if(it.dia>0&&it.p<=minD*it.dia&&!it.per&&!(it.r>0)){
@@ -733,7 +738,7 @@ function analizar(){
     }
     if(oferta&&estados.length)ofertas.push({...base,est:estados.join(' + ')});
   }
-  for(const r of traer.concat(llevar))r.cj=r.caja>1?r.sug/r.caja:null;   // cajas
+  for(const r of traer.concat(llevar))r.cj=r.caja>=1?r.sug/r.caja:null;   // cajas
   traer.sort((a,b)=>(a.cob??0)-(b.cob??0)||b.dia-a.dia);
   llevar.sort((a,b)=>b.sug-a.sug);ofertas.sort((a,b)=>b.dia-a.dia);perec.sort((a,b)=>b.sug-a.sug);
   res={traer,llevar,ofertas,perec,items,ref,total:items.size,movs:S.mov.rows.length,nOfv:ofv.size};
@@ -749,8 +754,14 @@ const pesoG=k=>{if(S.pesos[k]!=null)return S.pesos[k];const it=res&&res.items.ge
 const pesoKg=(k,q)=>{const g=pesoG(k);return g==null?null:g*q/1000};
 const savePlan=()=>guardar('plan',S.plan);
 const enPlan=(k,dir)=>S.plan.find(x=>x.k===k&&x.dir===dir);
-const cajaDe=k=>{const it=res&&res.items.get(k);return it&&it.caja>1?it.caja:0};
+const cajaDe=k=>{const it=res&&res.items.get(k);return it&&it.caja>=1?it.caja:0};   // unidades por caja (0 = falta definirla)
 const cajasTxt=(q,cj)=>{const c=q/cj;return Number.isInteger(c)?c:Math.round(c*100)/100};
+/* hablamos en cajas: «28 cajas», «0,7 cajas»; si no se conoce la caja, queda en unidades */
+const nCj=c=>Number.isInteger(c)?fn(c):(c<10?(Math.round(c*10)/10):Math.round(c)).toLocaleString('es-CO');
+const fcj=(q,cj)=>cj?`${nCj(q/cj)} ${q/cj===1?'caja':'cajas'}`:`${fn(q)} und`;
+const cjund=(q,cj)=>cj?`${fcj(q,cj)} (${fn(q)} und)`:`${fn(q)} und`;
+const vdia=r=>{const d=r.dia||0;if(!(d>0))return '0';const cj=r.caja>=1?r.caja:0,v=cj?d/cj:d;return (v<10?(Math.round(v*10)/10):Math.round(v)).toLocaleString('es-CO')+(cj?' cajas':' und')};
+const sinCaja=it=>!(it.caja>=1);
 const capKg=()=>Math.max(1,Math.round(+S.cfg.veh||1))*(+S.cfg.cap||2000);
 function filaPlan(it,dir,qty,org){return {k:it.k,ref:it.ref,desc:it.desc,grupo:it.grupo||'Sin grupo',dir,qty,org}}
 function validarAgregar(it,dir){
@@ -776,7 +787,7 @@ function bump(k,dir,delta){
   setQty(k,Math.max(0,q),dir);
 }
 function sugDe(it,dir){
-  const cj=it.caja>1?it.caja:1;
+  const cj=it.caja>=1?it.caja:1;
   if(dir==='traer')return Math.min(Math.floor(it.l/cj),Math.ceil(it.need/cj))*cj;
   const r=res.llevar.find(x=>x.k===it.k);return r?Math.min(it.p,r.sug):0;
 }
@@ -785,9 +796,23 @@ function toggleViaje(kind,k){
   const dir=kind==='traer'?'traer':'llevar',e=enPlan(k,dir);
   if(e){S.plan=S.plan.filter(x=>x!==e);savePlan();refrescar();aviso('Se quitó «'+it.desc+'» del viaje.');return}
   if(!validarAgregar(it,dir))return;
-  const q=Math.max(sugDe(it,dir),cajaDe(k)||1);
+  if(!cajaDe(k)){editarCaja(k,()=>toggleViaje(kind,k));return}   // siempre en cajas: primero se define la unidad de empaque
+  const q=Math.max(sugDe(it,dir),cajaDe(k));
   S.plan.push(filaPlan(it,dir,q,'manual'));savePlan();refrescar();
-  aviso('Agregado al viaje: '+it.desc+' · '+(cajaDe(k)?cajasTxt(q,cajaDe(k))+' cajas · ':'')+fn(q)+' und.');
+  aviso('Agregado al viaje: '+it.desc+' · '+cjund(q,cajaDe(k))+'.');
+}
+/* La persona indica cuántas unidades trae una caja de un producto que no la tiene definida (o corrige una). */
+function editarCaja(k,despues){
+  const it=res&&res.items.get(k);if(!it)return;
+  const act=cajaDe(k);
+  const v=prompt('¿Cuántas unidades trae UNA caja de este producto?\n\n'+it.desc+'\n\n(Ejemplo: 12. Si se maneja por unidad suelta, escriba 1.)',act||'');
+  if(v===null)return;
+  const n=Math.round(num(v));
+  if(!(n>=1)){aviso('Escriba un número entero mayor o igual a 1.',true);return}
+  S.cfg.cajasU=S.cfg.cajasU||{};S.cfg.cajasU[k]=n;guardar('cfg',S.cfg);
+  dirty=true;asegurar();
+  aviso('Listo: 1 caja = '+n+' unidades para «'+it.desc+'». Ahora se trabaja en cajas.');
+  if(despues)despues();else refrescar();
 }
 function totales(dir){
   let u=0,kg=0,sin=0;
@@ -839,7 +864,8 @@ function cargarSugeridos(dir){
   if(dir==='llevar'){   // excesos y sin rotación, hasta llenar el vehículo
     S.plan=S.plan.filter(x=>!(x.dir==='llevar'&&(x.org==='sug'||x.org==='comp')));
     const cap=capKg();let W=totales('llevar').kg,n=0;
-    const cand=res.llevar.filter(r=>!enPlan(r.k,'llevar')).map(r=>({r,it:res.items.get(r.k),g:pesoG(r.k)})).filter(c=>c.it&&c.g>0)
+    const sinC=res.llevar.filter(r=>!enPlan(r.k,'llevar')&&!(r.caja>=1)).length;   // sin unidad de empaque: no se agregan solos
+    const cand=res.llevar.filter(r=>!enPlan(r.k,'llevar')&&r.caja>=1).map(r=>({r,it:res.items.get(r.k),g:pesoG(r.k)})).filter(c=>c.it&&c.g>0)
       .sort((a,b)=>b.r.sug*b.g-a.r.sug*a.g);   // primero lo que más peso libera
     for(const c of cand){
       if(W>=cap)break;
@@ -849,14 +875,14 @@ function cargarSugeridos(dir){
       S.plan.push(filaPlan(c.it,'llevar',q,'sug'));W+=q*c.g/1000;n++;
     }
     savePlan();refrescar();
-    aviso(n?('Se agregaron '+n+' producto(s) con exceso o sin rotación al viaje ('+fk(W)+' kg de '+fk(cap)+' kg). Puede ajustar o quitar en el paso 3.'):'No hay más excesos ni productos sin rotación con peso conocido para agregar.',!n);
+    aviso((n?('Se agregaron '+n+' producto(s) con exceso o sin rotación al viaje ('+fk(W)+' kg de '+fk(cap)+' kg). Puede ajustar o quitar en el paso 3.'):'No hay más excesos ni productos sin rotación con peso conocido para agregar.')+(sinC?' '+sinC+' producto(s) no se agregaron porque falta su unidad de empaque.':''),!n);
     return;
   }
   S.plan=S.plan.filter(x=>!(x.dir==='traer'&&(x.org==='sug'||x.org==='comp')));
-  let n=0;
-  for(const r of res.traer){if(enPlan(r.k,'traer'))continue;const it=res.items.get(r.k);S.plan.push(filaPlan(it,'traer',r.sug,'sug'));n++}
+  let n=0,sinC=0;
+  for(const r of res.traer){if(enPlan(r.k,'traer'))continue;if(!(r.caja>=1)){sinC++;continue}const it=res.items.get(r.k);S.plan.push(filaPlan(it,'traer',r.sug,'sug'));n++}
   savePlan();refrescar();
-  aviso('Se agregaron '+n+' producto(s) agotados o por agotarse al viaje. Puede ajustar las cajas en el paso 3.');
+  aviso('Se agregaron '+n+' producto(s) agotados o por agotarse al viaje. Puede ajustar las cajas en el paso 3.'+(sinC?' '+sinC+' no se agregaron porque falta su unidad de empaque: indíquela y agréguelos.':''),sinC>0&&n===0);
 }
 function completar(){
   if(!asegurar())return;
@@ -864,12 +890,12 @@ function completar(){
   S.plan=S.plan.filter(x=>!(x.dir==='traer'&&x.org==='comp'));
   let W=totales('traer').kg;
   if(W>=obj){savePlan();refrescar();aviso(W>obj+1e-6?'La carga ya se pasa de la capacidad.':'El vehículo ya va lleno.',W>obj+1e-6);return}
-  const cand=[...res.items.values()].filter(it=>it.l>0&&it.dia>0&&it.need>0&&!esOF(it.ref)&&!enPlan(it.k,'traer')&&pesoG(it.k)>0)
+  const cand=[...res.items.values()].filter(it=>it.l>0&&it.dia>0&&it.need>0&&!esOF(it.ref)&&!enPlan(it.k,'traer')&&pesoG(it.k)>0&&it.caja>=1)
     .sort((a,b)=>(a.cob??1e9)-(b.cob??1e9)||b.dia-a.dia);
   let n=0;
   for(const it of cand){
     if(W>=obj)break;
-    const g=pesoG(it.k),cj=it.caja>1?it.caja:1;
+    const g=pesoG(it.k),cj=it.caja;
     let q=Math.min(Math.floor(it.l/cj),Math.ceil(it.need/cj))*cj;
     if(W+q*g/1000>obj)q=Math.floor((obj-W)*1000/(g*cj))*cj;   // última línea: solo las cajas completas que caben
     if(q<=0)continue;
@@ -926,22 +952,23 @@ const EXPL={
   ofertas:['info','Ofertas físicas (código OF). Solo se muestran para análisis: <b>no se mueven</b>.']
 };
 function razon(r,kind){
-  const dd=r.dia>0?`Se vende ≈ ${r.dia<10?r.dia.toFixed(1):fn(r.dia)} und al día. `:'';
+  const cj=r.caja>=1?r.caja:0;
+  const dd=r.dia>0?`Se vende ≈ ${vdia(r)} al día. `:'';
   if(kind==='traer'){
-    if(r.p<=0)return `No hay unidades en la bodega general. ${dd}En la externa hay ${fn(r.l)} und.`;
-    return `En la general alcanza para ${Math.max(0,Math.floor(r.cob))} día(s). ${dd}En la externa hay ${fn(r.l)} und.`;
+    if(r.p<=0)return `No hay unidades en la bodega general. ${dd}En la externa hay ${cjund(r.l,cj)}.`;
+    return `En la general alcanza para ${Math.max(0,Math.floor(r.cob))} día(s). ${dd}En la externa hay ${cjund(r.l,cj)}.`;
   }
   if(kind==='llevar'){
-    if(r.motivo==='Exceso')return `Hay ≈ ${fn(r.cob)} días de venta guardados. ${dd}Sobran ≈ ${fn(r.sug)} und que pueden ir a la externa.`;
-    return (r.dsm==null?'No registra ventas en el historial cargado. ':`Lleva ${r.dsm} días sin venderse. `)+`Pueden ir ${fn(r.sug)} und a la externa.`;
+    if(r.motivo==='Exceso')return `Hay ≈ ${fn(r.cob)} días de venta guardados. ${dd}Sobran ≈ ${cjund(r.sug,cj)} que pueden ir a la externa.`;
+    return (r.dsm==null?'No registra ventas en el historial cargado. ':`Lleva ${r.dsm} días sin venderse. `)+`Pueden ir ${cjund(r.sug,cj)} a la externa.`;
   }
-  if(kind==='perec')return `Perecedero con ${r.motivo==='Exceso'?'exceso':'baja rotación'}: ${fn(r.p)} und en la general. ${r.dsm==null?'Sin ventas registradas. ':`Última venta hace ${r.dsm} días. `}${dd}`;
-  return `Oferta física con alerta: ${r.est}. En la general hay ${fn(r.p)} und.`;
+  if(kind==='perec')return `Perecedero con ${r.motivo==='Exceso'?'exceso':'baja rotación'}: ${cjund(r.p,cj)} en la general. ${r.dsm==null?'Sin ventas registradas. ':`Última venta hace ${r.dsm} días. `}${dd}`;
+  return `Oferta física con alerta: ${r.est}. En la general hay ${cjund(r.p,cj)}.`;
 }
 function tono(txt){return /Agotado/.test(txt)?'bad':/Por agotarse|Exceso/.test(txt)?'warn':'mut'}
 function filtrosQue(kind){
   const q=$('q').value.toLowerCase().trim(),g=$('fGrupo').value,oc=$('qOcultar').checked,so=$('qSort').value;
-  let d=res[kind].filter(r=>(!g||r.grupo===g)&&(!q||r.ref.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||(r.marca||'').toLowerCase().includes(q)||(r.barras||'').includes(q))&&(!oc||!enPlan(r.k,kind)));
+  let d=res[kind].filter(r=>(!g||r.grupo===g)&&(!q||r.ref.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||(r.marca||'').toLowerCase().includes(q)||(r.barras||'').includes(q))&&(!oc||!enPlan(r.k,kind))&&(!soloSin||!(r.caja>=1)));
   if(so==='nom')d=[...d].sort((a,b)=>a.desc.localeCompare(b.desc));
   else if(so==='cant')d=[...d].sort((a,b)=>(b.sug||b.p||0)-(a.sug||a.p||0));
   return d;
@@ -959,6 +986,8 @@ function pintarQue(){
   const kind=lista,[ei,et]=EXPL[kind];
   const nSel=(kind==='traer'||kind==='llevar')?res[kind].filter(r=>enPlan(r.k,kind)).length:0;
   $('expl').innerHTML=`<span class="ic">${ico(ei)}</span><div>${et}${nSel?` <b>Ya agregó ${nSel} al viaje.</b>`:''}</div>`;
+  const nSin=(kind==='traer'||kind==='llevar')?res[kind].filter(r=>!(r.caja>=1)).length:0;
+  $('aviCaja').innerHTML=nSin?avisoCaja(nSin):'';
   // grupos del listado
   const gs=[...new Set(res[kind].map(r=>r.grupo))].sort(),prev=$('fGrupo').value;
   $('fGrupo').innerHTML='<option value="">Todos los grupos</option>'+gs.map(g=>`<option>${esc(g)}</option>`).join('');
@@ -973,14 +1002,22 @@ function pintarQue(){
   $('cnt').textContent=tot?`Mostrando ${Math.min(qShown,tot)} de ${tot} producto${tot>1?'s':''}`:'';
   pintarBarra();
 }
+/* aviso de productos sin unidad de empaque */
+function avisoCaja(n){
+  return `<div class="msg" style="margin:0 0 14px;align-items:center;flex-wrap:wrap">${ico('alert')}<span style="flex:1;min-width:220px"><b>${n} producto${n>1?'s':''} sin unidad de empaque.</b> Indique cuántas unidades trae una caja de cada uno para trabajar siempre en cajas.</span><button class="btn sm sec" data-solosin="1">${soloSin?'Ver todos':'Ver solo esos'}</button></div>`;
+}
+function stockQ(q,cj,etq){   // cantidad en cajas (principal) y unidades (secundaria)
+  return `<div><span>${etq}</span><b>${cj?nCj(q/cj):fn(q)}</b><small>${cj?(q/cj===1?'caja':'cajas')+' · '+fn(q)+' und':'und (falta la caja)'}</small></div>`;
+}
 function itemQue(r,kind){
-  const mov=kind==='traer'||kind==='llevar',pe=mov?enPlan(r.k,kind):null,cj=r.caja>1?r.caja:0;
+  const mov=kind==='traer'||kind==='llevar',pe=mov?enPlan(r.k,kind):null,cj=r.caja>=1?r.caja:0;
   const w=mov?pesoKg(r.k,r.sug||0):null;
   const lab=r.est||r.motivo||'';
-  const stat=kind==='traer'?`<div><span>En la general</span><b>${fn(r.p)}</b></div><div><span>En la externa</span><b>${fn(r.l)}</b></div>`
-    :`<div><span>En la general</span><b>${fn(r.p)}</b></div><div><span>Se vende al día</span><b>${r.dia>0?(r.dia<10?r.dia.toFixed(1):fn(r.dia)):'0'}</b></div>`;
-  const accion=mov?`${r.sug>0?`<div class="sg">Sugerido: <b>${cj?cajasTxt(r.sug,cj)+' caja'+(r.sug/cj!==1?'s':''):fn(r.sug)+' und'}</b><small>${cj?fn(r.sug)+' und':''}${w!=null?(cj?' · ':'')+'≈ '+fk(w)+' kg':''}</small></div>`:''}
-     <button class="btn sm ${pe?'ok':''}" data-add="1" data-k="${esc(r.k)}">${pe?ico('check')+' En el viaje · '+(cj?cajasTxt(pe.qty,cj)+' cj':fn(pe.qty)+' und'):ico('plus')+' Agregar al viaje'}</button>`:'<span class="chip mut">Solo informativo</span>';
+  const stat=kind==='traer'?stockQ(r.p,cj,'En la general')+stockQ(r.l,cj,'En la externa')
+    :stockQ(r.p,cj,'En la general')+`<div><span>Se vende al día</span><b>${vdia(r)}</b></div>`;
+  const accion=mov?`${r.sug>0?`<div class="sg">Sugerido: <b>${fcj(r.sug,cj)}</b><small>${cj?fn(r.sug)+' und':''}${w!=null?(cj?' · ':'')+'≈ '+fk(w)+' kg':''}</small></div>`:''}
+     ${cj?'':`<span class="chip warn">${ico('alert')} Falta la unidad de empaque</span>`}
+     <button class="btn sm ${pe?'ok':''}" data-add="1" data-k="${esc(r.k)}">${pe?ico('check')+' En el viaje · '+fcj(pe.qty,cj):(cj?ico('plus')+' Agregar al viaje':'Indicar unidades por caja y agregar')}</button>`:'<span class="chip mut">Solo informativo</span>';
   return `<div class="pi ${pe?'sel':''}"><div class="pn"><b>${esc(r.desc)}</b><small>Ref ${esc(r.ref)} · ${r.barras?esc(r.barras):'sin código de barras'}${r.marca?' · '+esc(r.marca):''} · ${esc(r.grupo)}</small></div>
     <div class="ps"><span class="chip ${tono(lab)}">${esc(lab)}</span><p>${esc(razon(r,kind))}</p></div>
     <div class="pq">${stat}</div><div class="pa">${accion}</div></div>`;
@@ -999,7 +1036,7 @@ $('btnXls').onclick=()=>{
 
 /* ---------- Paso 3: armar el viaje ---------- */
 function setDirT(d){
-  dirT=d;$('cNec').checked=false;$('cQ').value='';cShown=80;pintarViaje();
+  dirT=d;soloSin=false;$('cNec').checked=false;$('cQ').value='';cShown=80;pintarViaje();
 }
 function pintarViaje(){
   const ok=asegurar();
@@ -1008,7 +1045,7 @@ function pintarViaje(){
   const dir=dirT,nT=S.plan.filter(x=>x.dir==='traer').length,nL=S.plan.filter(x=>x.dir==='llevar').length;
   $('dirTabs').innerHTML=`<button data-dir="traer" class="${dir==='traer'?'on':''}">${ico('down')} Traer a la general <span class="cn">${nT}</span></button><button data-dir="llevar" class="${dir==='llevar'?'on':''}">${ico('up')} Llevar a la externa <span class="cn">${nL}</span></button>`;
   $('cTitulo').textContent=dir==='traer'?'1. Elija qué traer de la bodega externa':'1. Elija qué llevar a la bodega externa';
-  $('cAyuda').textContent=dir==='traer'?'Estos son los productos con existencias en la externa. Primero los que más necesita la bodega general. Use − y + para cambiar las cajas.':'Estos son los productos de la general que se pueden llevar (los perecederos no aparecen). Primero los que tienen exceso o no rotan. Use − y + para cambiar las cajas.';
+  $('cAyuda').textContent=dir==='traer'?'Todo se cuenta en cajas completas. Estos son los productos con existencias en la externa, primero los que más necesita la bodega general. Use − y + para cambiar las cajas.':'Todo se cuenta en cajas completas. Estos son los productos de la general que se pueden llevar (los perecederos no aparecen), primero los que tienen exceso o no rotan. Use − y + para cambiar las cajas.';
   $('cNecT').textContent=dir==='traer'?'Solo los que necesitan reposición':'Solo excesos y sin rotación';
   pintarCat();pintarPanel();
 }
@@ -1025,21 +1062,25 @@ function pintarCat(){
   if($('cGrupo').dataset.k!==key){const prev=$('cGrupo').value;$('cGrupo').dataset.k=key;
     $('cGrupo').innerHTML='<option value="">Todos los grupos</option>'+gs.map(x=>`<option>${esc(x)}</option>`).join('');
     if(gs.includes(prev))$('cGrupo').value=prev}
-  let r=all.filter(it=>(!$('cGrupo').value||(it.grupo||'Sin grupo')===$('cGrupo').value)&&(!nec||(dir==='traer'?it.need>0:lv.has(it.k)))&&(!q||it.ref.toLowerCase().includes(q)||it.desc.toLowerCase().includes(q)||(it.marca||'').toLowerCase().includes(q)||(it.barras||'').includes(q)));
+  const nSin=all.filter(sinCaja).length;
+  $('cAvi').innerHTML=nSin?avisoCaja(nSin):'';
+  let r=all.filter(it=>(!$('cGrupo').value||(it.grupo||'Sin grupo')===$('cGrupo').value)&&(!nec||(dir==='traer'?it.need>0:lv.has(it.k)))&&(!soloSin||sinCaja(it))&&(!q||it.ref.toLowerCase().includes(q)||it.desc.toLowerCase().includes(q)||(it.marca||'').toLowerCase().includes(q)||(it.barras||'').includes(q)));
   if(dir==='traer')r.sort((a,b)=>((b.need>0)-(a.need>0))||((a.cob??1e9)-(b.cob??1e9))||b.dia-a.dia);
   else r.sort((a,b)=>(lv.has(b.k)-lv.has(a.k))||((lv.get(b.k)?lv.get(b.k).sug:0)-(lv.get(a.k)?lv.get(a.k).sug:0))||b.p-a.p);
   const tot=r.length;r=r.slice(0,cShown);
   const sc=$('twCat').scrollTop;
   $('cat').innerHTML=r.length?r.map(it=>{
-    const e=enPlan(it.k,dir),sug=sugDe(it,dir),max=dir==='traer'?it.l:it.p,cj=it.caja>1?it.caja:0,mot=lv.get(it.k),w=e?pesoKg(it.k,e.qty):null;
-    const origen=dir==='traer'?`<div class="cs"><b>${fn(it.l)}</b>en la externa${cj?` · ${cajasTxt(it.l,cj)} cj`:''}</div>`:`<div class="cs"><b>${fn(it.p)}</b>en la general${cj?` · ${cajasTxt(it.p,cj)} cj`:''}</div>`;
+    const e=enPlan(it.k,dir),sug=sugDe(it,dir),max=dir==='traer'?it.l:it.p,cj=it.caja>=1?it.caja:0,mot=lv.get(it.k),w=e?pesoKg(it.k,e.qty):null;
+    const oq=dir==='traer'?it.l:it.p,olb=dir==='traer'?'en la externa':'en la general';
+    const origen=`<div class="cs"><b>${cj?nCj(oq/cj):fn(oq)}</b>${cj?(oq/cj===1?'caja':'cajas'):'und'} ${olb}${cj?`<br>${fn(oq)} und`:''}</div>`;
     const sit=dir==='traer'?(it.need>0?`<span class="chip ${it.p<=0?'bad':'warn'} tg">${it.p<=0?'Agotado':'Por agotarse'}</span>`:`<span class="chip mut tg">Con existencias</span>`)
       :(mot?`<span class="chip ${mot.motivo==='Exceso'?'warn':'mut'} tg">${mot.motivo}</span>`:`<span class="chip mut tg">Rota normal</span>`);
-    const vende=`<div class="cs"><b>${it.dia>0?(it.dia<10?it.dia.toFixed(1):fn(it.dia)):'0'}</b>se vende al día${it.cob!=null&&dir==='llevar'?`<br>${fn(it.cob)} días de venta guardados`:''}</div>`;
+    const vende=`<div class="cs"><b>${vdia(it)}</b>se vende al día${it.cob!=null&&dir==='llevar'?`<br>${fn(it.cob)} días de venta guardados`:''}</div>`;
     return `<div class="ci ${e?'sel':''}"><div><b>${esc(it.desc)}</b><small style="display:block;color:var(--mut);font-size:12.5px">Ref ${esc(it.ref)} · ${it.barras?esc(it.barras):'sin código de barras'}${it.marca?' · '+esc(it.marca):''}</small>${sit}</div>
       <div>${origen}${vende}</div>
-      <div class="cq">${sug>0?`<div class="cs"><b>${cj?cajasTxt(sug,cj)+' cj':fn(sug)+' und'}</b>sugerido</div><button class="btn link" data-cats="${esc(it.k)}" data-d="${dir}">Usar sugerido</button>`:'<div class="cs">Sin sugerencia</div>'}</div>
-      <div>${qc(it.k,dir,e?e.qty:0,max,cj)}<small style="display:block;color:var(--mut);font-size:12px;margin-top:4px">${e?fn(e.qty)+' und'+(w!=null?' · '+fk(w)+' kg':' · sin peso'):cj?'1 caja = '+cj+' und':'sin tamaño de caja'}</small></div></div>`}).join('')
+      <div class="cq">${sug>0?`<div class="cs"><b>${fcj(sug,cj)}</b>sugerido</div>${cj?`<button class="btn link" data-cats="${esc(it.k)}" data-d="${dir}">Usar sugerido</button>`:''}`:'<div class="cs">Sin sugerencia</div>'}</div>
+      <div>${cj?`${qc(it.k,dir,e?e.qty:0,max,cj)}<small style="display:block;color:var(--mut);font-size:12px;margin-top:4px">${e?cjund(e.qty,cj)+(w!=null?' · '+fk(w)+' kg':' · sin peso'):'1 caja = '+cj+' und'} · <button class="btn link" style="padding:0;font-size:12px" data-caja="${esc(it.k)}">corregir</button></small>`
+        :`<span class="chip warn">${ico('alert')} Falta la unidad de empaque</span><div style="margin-top:6px"><button class="btn sm" data-caja="${esc(it.k)}">Indicar unidades por caja</button></div>`}</div></div>`}).join('')
     :`<div class="empty"><h2>Ningún producto coincide</h2><p>Pruebe con otro nombre o quite el filtro.</p></div>`;
   $('twCat').scrollTop=sc;
   $('cInfo').innerHTML=(tot>cShown?`Se muestran ${cShown} de ${tot} productos. <button class="btn link" data-mas="1">Mostrar más</button>`:`${tot} producto${tot===1?'':'s'} disponibles.`);
@@ -1054,7 +1095,7 @@ function pintarPanel(){
     return `<div class="g"><div class="gt"><b>${nveh>1?'Vehículo '+v.n:'Vehículo'}${nm}</b><span>${fk(v.kg)} / ${fn(cap1)} kg</span></div><div class="gb"><i class="${cl}" style="width:${Math.min(100,pct)}%"></i><u style="left:${fill*100}%" title="Desde aquí se considera lleno"></u></div></div>`}).join('');
   const sel=S.plan.filter(x=>x.dir===dir).sort((a,b)=>(a.grupo||'').localeCompare(b.grupo||'')||a.desc.localeCompare(b.desc));
   const filas=sel.map(x=>{const it=res.items.get(x.k),cj=cajaDe(x.k),max=it?(dir==='traer'?it.l:it.p):0,w=pesoKg(x.k,x.qty);
-    return `<div class="sl"><div class="sn"><b title="${esc(x.desc)}">${esc(x.desc)}</b><small>${cj?cajasTxt(x.qty,cj)+' cj · ':''}${fn(x.qty)} und · ${w!=null?fk(w)+' kg':`<button class="btn link" style="padding:0" data-peso="${esc(x.k)}">falta el peso: escribirlo</button>`}</small></div>${qc(x.k,dir,x.qty,max,cj)}<button class="x" data-del="${esc(x.k)}" data-d="${dir}" title="Quitar del viaje" aria-label="Quitar">✕</button></div>`}).join('');
+    return `<div class="sl"><div class="sn"><b title="${esc(x.desc)}">${esc(x.desc)}</b><small>${cj?fn(x.qty)+' und · ':''}${w!=null?fk(w)+' kg':`<button class="btn link" style="padding:0" data-peso="${esc(x.k)}">falta el peso: escribirlo</button>`}</small></div>${cj?qc(x.k,dir,x.qty,max,cj):`<button class="btn sm" data-caja="${esc(x.k)}">Indicar caja</button>`}<button class="x" data-del="${esc(x.k)}" data-d="${dir}" title="Quitar del viaje" aria-label="Quitar">✕</button></div>`}).join('');
   $('pan').innerHTML=`<h3>${ico('truck')} Su viaje · ${dir==='traer'?'traer a la general':'llevar a la externa'}</h3>
     <div class="vrow"><div><label class="f" for="pVeh">Vehículos</label><input type="number" id="pVeh" min="1" step="1" value="${nveh}" data-veh="1"></div>
       <div style="flex:2"><label class="f" for="pCap">Capacidad de cada uno</label><select id="pCap" data-capsel="1"><option value="2000" ${cap1===2000?'selected':''}>2 toneladas</option><option value="5000" ${cap1===5000?'selected':''}>5 toneladas (turbo)</option><option value="9000" ${cap1===9000?'selected':''}>9 toneladas (sencillo)</option><option value="otro" ${std?'':'selected'}>Otra…</option></select></div>
@@ -1098,9 +1139,9 @@ function excelViaje(){
   const {V}=distribuir(d);
   for(const v of V)if(v.items.length)sum.push([`   Vehículo ${v.n}`+((S.cfg.vinfo&&S.cfg.vinfo[v.n-1])?' · '+S.cfg.vinfo[v.n-1]:''),v.items.length,v.u,+v.kg.toFixed(1),+(v.kg/cap1*100).toFixed(1),estadoKg(v.kg,cap1).tit]);
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Resumen');
-  const aoa=[['Vehículo','Conductor / placa','Referencia','Descripción','Código de barras','Grupo shopper','Origen','Unidades','Cajas','Und/caja','Peso unit. (g)','Peso total (kg)']];
+  const aoa=[['Vehículo','Conductor / placa','Referencia','Descripción','Código de barras','Grupo shopper','Origen','Cajas','Unidades','Und/caja','Peso unit. (g)','Peso total (kg)']];
   for(const v of V)for(const it of v.items){const g=pesoG(it.x.k),cj=cajaDe(it.x.k),im=res.items.get(it.x.k)||{};
-    aoa.push([v.n,(S.cfg.vinfo&&S.cfg.vinfo[v.n-1])||'',it.x.ref,it.x.desc,im.barras||'',it.x.grupo,it.x.org==='sug'?'Sugerido':it.x.org==='comp'?'Completar peso':'Manual',it.qty,cj?+(it.qty/cj).toFixed(2):'',cj||'',g==null?'':g,it.kg==null?'':+it.kg.toFixed(2)])}
+    aoa.push([v.n,(S.cfg.vinfo&&S.cfg.vinfo[v.n-1])||'',it.x.ref,it.x.desc,im.barras||'',it.x.grupo,it.x.org==='sug'?'Sugerido':it.x.org==='comp'?'Completar peso':'Manual',cj?+(it.qty/cj).toFixed(2):'',it.qty,cj||'',g==null?'':g,it.kg==null?'':+it.kg.toFixed(2)])}
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),d==='traer'?'Traer a general':'Llevar a externa');
   XLSX.writeFile(wb,'viaje_'+d+'_armenia_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
@@ -1116,7 +1157,7 @@ function imprimir(){
     const org=d==='traer'?'Bodega externa (07X1E)':'Bodega general (07001)',dst=d==='traer'?'Bodega general (07001)':'Bodega externa';
     const pagina=(titulo,items,info,estado,kg,u)=>{
       const filas=items.map((it,n)=>{const cj=cajaDe(it.x.k),im=res.items.get(it.x.k)||{};
-        return `<tr><td class="n">${n+1}</td><td>${esc(it.x.ref)}</td><td>${esc(it.x.desc)}</td><td>${esc(im.barras||'—')}</td><td class="n">${fn(it.qty)}</td><td class="n">${cj?cajasTxt(it.qty,cj):'—'}</td><td class="n">${it.kg==null?'—':fk(it.kg)}</td><td class="c">☐</td><td></td></tr>`}).join('');
+        return `<tr><td class="n">${n+1}</td><td>${esc(it.x.ref)}</td><td>${esc(it.x.desc)}</td><td>${esc(im.barras||'—')}</td><td class="n"><b>${cj?cajasTxt(it.qty,cj):'—'}</b></td><td class="n">${fn(it.qty)}</td><td class="n">${it.kg==null?'—':fk(it.kg)}</td><td class="c">☐</td><td></td></tr>`}).join('');
       const sin=items.filter(it=>it.kg==null).length;
       const totCj=items.reduce((s,it)=>{const cj=cajaDe(it.x.k);return s+(cj?it.qty/cj:0)},0),sinCj=items.filter(it=>!cajaDe(it.x.k)).length;
       return `<div class="pr pg">
@@ -1130,8 +1171,8 @@ function imprimir(){
           <div><b>Referencias:</b> ${items.length} · <b>Unidades:</b> ${fn(u)}</div>
           <div><b>Estado:</b> ${esc(estado)}</div>
         </div>
-        <table><tr><th class="n">#</th><th>Referencia</th><th>Descripción</th><th>Código de barras</th><th class="n">Unidades</th><th class="n">Cajas</th><th class="n">Peso (kg)</th><th class="c">Cargado</th><th>Observaciones</th></tr>${filas}
-          <tr><td colspan="4" class="n"><b>Total</b></td><td class="n"><b>${fn(u)}</b></td><td class="n"><b>${cajasTxt(totCj,1)}</b></td><td class="n"><b>${fk(kg)}</b></td><td></td><td></td></tr></table>
+        <table><tr><th class="n">#</th><th>Referencia</th><th>Descripción</th><th>Código de barras</th><th class="n">Cajas</th><th class="n">Unidades</th><th class="n">Peso (kg)</th><th class="c">Cargado</th><th>Observaciones</th></tr>${filas}
+          <tr><td colspan="4" class="n"><b>Total</b></td><td class="n"><b>${cajasTxt(totCj,1)}</b></td><td class="n"><b>${fn(u)}</b></td><td class="n"><b>${fk(kg)}</b></td><td></td><td></td></tr></table>
         ${sin?`<p style="font-size:11px">Nota: ${sin} línea(s) sin peso registrado no se incluyen en el peso total.</p>`:''}
         ${sinCj?`<p style="font-size:11px">Nota: ${sinCj} línea(s) sin tamaño de caja registrado (columna Cajas en «—»); su cantidad va en unidades.</p>`:''}
         <div class="firmas"><div>Alistó</div><div>Conductor</div><div>Recibió</div></div>
@@ -1154,7 +1195,9 @@ document.addEventListener('click',e=>{
   const t=e.target;let b;
   if((b=t.closest('[data-v]'))){if(!b.disabled)show(b.dataset.v);return}
   if((b=t.closest('[data-go]'))){if(lista==='traer'||lista==='llevar')dirT=lista;show('viaje');return}
-  if((b=t.closest('[data-lista]'))){lista=b.dataset.lista;qShown=40;$('q').value='';$('fGrupo').value='';pintarQue();return}
+  if((b=t.closest('[data-lista]'))){lista=b.dataset.lista;qShown=40;soloSin=false;$('q').value='';$('fGrupo').value='';pintarQue();return}
+  if((b=t.closest('[data-caja]'))){editarCaja(b.dataset.caja);return}
+  if((b=t.closest('[data-solosin]'))){soloSin=!soloSin;qShown=40;cShown=80;if(step==='que')pintarQue();else pintarViaje();return}
   if((b=t.closest('[data-add]'))){toggleViaje(lista,b.dataset.k);return}
   if((b=t.closest('[data-dir]'))){setDirT(b.dataset.dir);return}
   if((b=t.closest('[data-qm]'))){bump(b.dataset.qm,b.dataset.d,-1);return}
